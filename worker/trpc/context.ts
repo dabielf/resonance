@@ -1,17 +1,20 @@
 export async function createContext({
-  req,
-  env,
-  workerCtx,
+	req,
+	env,
+	workerCtx,
+	userId,
 }: {
-  req: Request;
-  env: Env;
-  workerCtx: ExecutionContext;
+	req: Request;
+	env: Env;
+	workerCtx: ExecutionContext;
+	userId: number;
 }) {
-  return {
-    req,
-    env,
-    workerCtx,
-  };
+	return {
+		req,
+		env,
+		workerCtx,
+		userId,
+	};
 }
 
 export type Context = Awaited<ReturnType<typeof createContext>>;

@@ -9,14 +9,11 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as HomelayoutRouteImport } from './routes/_homelayout'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteRouteImport } from './routes/app/route'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app/index'
-import { Route as HomelayoutIndexRouteImport } from './routes/_homelayout.index'
-import { Route as AppYoloRouteImport } from './routes/app/yolo'
 import { Route as AppSettingsRouteImport } from './routes/app/settings'
-import { Route as HomelayoutContactRouteImport } from './routes/_homelayout.contact'
-import { Route as HomelayoutAboutRouteImport } from './routes/_homelayout.about'
 import { Route as AppProjectsIndexRouteImport } from './routes/app/projects/index'
 import { Route as AppCreationIndexRouteImport } from './routes/app/creation/index'
 import { Route as AppContactsIndexRouteImport } from './routes/app/contacts/index'
@@ -24,12 +21,14 @@ import { Route as AppProjectsAssistantRouteImport } from './routes/app/projects/
 import { Route as AppCreationWritersRouteImport } from './routes/app/creation/writers'
 import { Route as AppCreationResourcesRouteImport } from './routes/app/creation/resources'
 import { Route as AppCreationProfilesRouteImport } from './routes/app/creation/profiles'
+import { Route as AppCreationPersonasRouteImport } from './routes/app/creation/personas'
 import { Route as AppCreationCreateRouteImport } from './routes/app/creation/create'
 import { Route as AppContactsListRouteImport } from './routes/app/contacts/list'
 import { Route as AppContactsEngageRouteImport } from './routes/app/contacts/engage'
 
-const HomelayoutRoute = HomelayoutRouteImport.update({
-  id: '/_homelayout',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRouteRoute = AppRouteRouteImport.update({
@@ -37,35 +36,20 @@ const AppRouteRoute = AppRouteRouteImport.update({
   path: '/app',
   getParentRoute: () => rootRouteImport,
 } as any)
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AppRouteRoute,
-} as any)
-const HomelayoutIndexRoute = HomelayoutIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => HomelayoutRoute,
-} as any)
-const AppYoloRoute = AppYoloRouteImport.update({
-  id: '/yolo',
-  path: '/yolo',
   getParentRoute: () => AppRouteRoute,
 } as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => AppRouteRoute,
-} as any)
-const HomelayoutContactRoute = HomelayoutContactRouteImport.update({
-  id: '/contact',
-  path: '/contact',
-  getParentRoute: () => HomelayoutRoute,
-} as any)
-const HomelayoutAboutRoute = HomelayoutAboutRouteImport.update({
-  id: '/about',
-  path: '/about',
-  getParentRoute: () => HomelayoutRoute,
 } as any)
 const AppProjectsIndexRoute = AppProjectsIndexRouteImport.update({
   id: '/projects/',
@@ -102,6 +86,11 @@ const AppCreationProfilesRoute = AppCreationProfilesRouteImport.update({
   path: '/creation/profiles',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppCreationPersonasRoute = AppCreationPersonasRouteImport.update({
+  id: '/creation/personas',
+  path: '/creation/personas',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const AppCreationCreateRoute = AppCreationCreateRouteImport.update({
   id: '/creation/create',
   path: '/creation/create',
@@ -119,16 +108,15 @@ const AppContactsEngageRoute = AppContactsEngageRouteImport.update({
 } as any)
 
 export interface FileRoutesByFullPath {
+  '/': typeof IndexRoute
   '/app': typeof AppRouteRouteWithChildren
-  '/about': typeof HomelayoutAboutRoute
-  '/contact': typeof HomelayoutContactRoute
+  '/login': typeof LoginRoute
   '/app/settings': typeof AppSettingsRoute
-  '/app/yolo': typeof AppYoloRoute
-  '/': typeof HomelayoutIndexRoute
   '/app/': typeof AppIndexRoute
   '/app/contacts/engage': typeof AppContactsEngageRoute
   '/app/contacts/list': typeof AppContactsListRoute
   '/app/creation/create': typeof AppCreationCreateRoute
+  '/app/creation/personas': typeof AppCreationPersonasRoute
   '/app/creation/profiles': typeof AppCreationProfilesRoute
   '/app/creation/resources': typeof AppCreationResourcesRoute
   '/app/creation/writers': typeof AppCreationWritersRoute
@@ -138,15 +126,14 @@ export interface FileRoutesByFullPath {
   '/app/projects': typeof AppProjectsIndexRoute
 }
 export interface FileRoutesByTo {
-  '/about': typeof HomelayoutAboutRoute
-  '/contact': typeof HomelayoutContactRoute
+  '/': typeof IndexRoute
+  '/login': typeof LoginRoute
   '/app/settings': typeof AppSettingsRoute
-  '/app/yolo': typeof AppYoloRoute
-  '/': typeof HomelayoutIndexRoute
   '/app': typeof AppIndexRoute
   '/app/contacts/engage': typeof AppContactsEngageRoute
   '/app/contacts/list': typeof AppContactsListRoute
   '/app/creation/create': typeof AppCreationCreateRoute
+  '/app/creation/personas': typeof AppCreationPersonasRoute
   '/app/creation/profiles': typeof AppCreationProfilesRoute
   '/app/creation/resources': typeof AppCreationResourcesRoute
   '/app/creation/writers': typeof AppCreationWritersRoute
@@ -157,17 +144,15 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
   '/app': typeof AppRouteRouteWithChildren
-  '/_homelayout': typeof HomelayoutRouteWithChildren
-  '/_homelayout/about': typeof HomelayoutAboutRoute
-  '/_homelayout/contact': typeof HomelayoutContactRoute
+  '/login': typeof LoginRoute
   '/app/settings': typeof AppSettingsRoute
-  '/app/yolo': typeof AppYoloRoute
-  '/_homelayout/': typeof HomelayoutIndexRoute
   '/app/': typeof AppIndexRoute
   '/app/contacts/engage': typeof AppContactsEngageRoute
   '/app/contacts/list': typeof AppContactsListRoute
   '/app/creation/create': typeof AppCreationCreateRoute
+  '/app/creation/personas': typeof AppCreationPersonasRoute
   '/app/creation/profiles': typeof AppCreationProfilesRoute
   '/app/creation/resources': typeof AppCreationResourcesRoute
   '/app/creation/writers': typeof AppCreationWritersRoute
@@ -179,16 +164,15 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/app'
-    | '/about'
-    | '/contact'
-    | '/app/settings'
-    | '/app/yolo'
     | '/'
+    | '/app'
+    | '/login'
+    | '/app/settings'
     | '/app/'
     | '/app/contacts/engage'
     | '/app/contacts/list'
     | '/app/creation/create'
+    | '/app/creation/personas'
     | '/app/creation/profiles'
     | '/app/creation/resources'
     | '/app/creation/writers'
@@ -198,15 +182,14 @@ export interface FileRouteTypes {
     | '/app/projects'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/about'
-    | '/contact'
-    | '/app/settings'
-    | '/app/yolo'
     | '/'
+    | '/login'
+    | '/app/settings'
     | '/app'
     | '/app/contacts/engage'
     | '/app/contacts/list'
     | '/app/creation/create'
+    | '/app/creation/personas'
     | '/app/creation/profiles'
     | '/app/creation/resources'
     | '/app/creation/writers'
@@ -216,17 +199,15 @@ export interface FileRouteTypes {
     | '/app/projects'
   id:
     | '__root__'
+    | '/'
     | '/app'
-    | '/_homelayout'
-    | '/_homelayout/about'
-    | '/_homelayout/contact'
+    | '/login'
     | '/app/settings'
-    | '/app/yolo'
-    | '/_homelayout/'
     | '/app/'
     | '/app/contacts/engage'
     | '/app/contacts/list'
     | '/app/creation/create'
+    | '/app/creation/personas'
     | '/app/creation/profiles'
     | '/app/creation/resources'
     | '/app/creation/writers'
@@ -237,17 +218,18 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
+  IndexRoute: typeof IndexRoute
   AppRouteRoute: typeof AppRouteRouteWithChildren
-  HomelayoutRoute: typeof HomelayoutRouteWithChildren
+  LoginRoute: typeof LoginRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/_homelayout': {
-      id: '/_homelayout'
-      path: ''
-      fullPath: ''
-      preLoaderRoute: typeof HomelayoutRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app': {
@@ -257,25 +239,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/': {
       id: '/app/'
       path: '/'
       fullPath: '/app/'
       preLoaderRoute: typeof AppIndexRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
-    '/_homelayout/': {
-      id: '/_homelayout/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof HomelayoutIndexRouteImport
-      parentRoute: typeof HomelayoutRoute
-    }
-    '/app/yolo': {
-      id: '/app/yolo'
-      path: '/yolo'
-      fullPath: '/app/yolo'
-      preLoaderRoute: typeof AppYoloRouteImport
       parentRoute: typeof AppRouteRoute
     }
     '/app/settings': {
@@ -284,20 +259,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/settings'
       preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRouteRoute
-    }
-    '/_homelayout/contact': {
-      id: '/_homelayout/contact'
-      path: '/contact'
-      fullPath: '/contact'
-      preLoaderRoute: typeof HomelayoutContactRouteImport
-      parentRoute: typeof HomelayoutRoute
-    }
-    '/_homelayout/about': {
-      id: '/_homelayout/about'
-      path: '/about'
-      fullPath: '/about'
-      preLoaderRoute: typeof HomelayoutAboutRouteImport
-      parentRoute: typeof HomelayoutRoute
     }
     '/app/projects/': {
       id: '/app/projects/'
@@ -348,6 +309,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCreationProfilesRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/app/creation/personas': {
+      id: '/app/creation/personas'
+      path: '/creation/personas'
+      fullPath: '/app/creation/personas'
+      preLoaderRoute: typeof AppCreationPersonasRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/app/creation/create': {
       id: '/app/creation/create'
       path: '/creation/create'
@@ -374,11 +342,11 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteRouteChildren {
   AppSettingsRoute: typeof AppSettingsRoute
-  AppYoloRoute: typeof AppYoloRoute
   AppIndexRoute: typeof AppIndexRoute
   AppContactsEngageRoute: typeof AppContactsEngageRoute
   AppContactsListRoute: typeof AppContactsListRoute
   AppCreationCreateRoute: typeof AppCreationCreateRoute
+  AppCreationPersonasRoute: typeof AppCreationPersonasRoute
   AppCreationProfilesRoute: typeof AppCreationProfilesRoute
   AppCreationResourcesRoute: typeof AppCreationResourcesRoute
   AppCreationWritersRoute: typeof AppCreationWritersRoute
@@ -390,11 +358,11 @@ interface AppRouteRouteChildren {
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppSettingsRoute: AppSettingsRoute,
-  AppYoloRoute: AppYoloRoute,
   AppIndexRoute: AppIndexRoute,
   AppContactsEngageRoute: AppContactsEngageRoute,
   AppContactsListRoute: AppContactsListRoute,
   AppCreationCreateRoute: AppCreationCreateRoute,
+  AppCreationPersonasRoute: AppCreationPersonasRoute,
   AppCreationProfilesRoute: AppCreationProfilesRoute,
   AppCreationResourcesRoute: AppCreationResourcesRoute,
   AppCreationWritersRoute: AppCreationWritersRoute,
@@ -408,25 +376,10 @@ const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(
   AppRouteRouteChildren,
 )
 
-interface HomelayoutRouteChildren {
-  HomelayoutAboutRoute: typeof HomelayoutAboutRoute
-  HomelayoutContactRoute: typeof HomelayoutContactRoute
-  HomelayoutIndexRoute: typeof HomelayoutIndexRoute
-}
-
-const HomelayoutRouteChildren: HomelayoutRouteChildren = {
-  HomelayoutAboutRoute: HomelayoutAboutRoute,
-  HomelayoutContactRoute: HomelayoutContactRoute,
-  HomelayoutIndexRoute: HomelayoutIndexRoute,
-}
-
-const HomelayoutRouteWithChildren = HomelayoutRoute._addFileChildren(
-  HomelayoutRouteChildren,
-)
-
 const rootRouteChildren: RootRouteChildren = {
+  IndexRoute: IndexRoute,
   AppRouteRoute: AppRouteRouteWithChildren,
-  HomelayoutRoute: HomelayoutRouteWithChildren,
+  LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
