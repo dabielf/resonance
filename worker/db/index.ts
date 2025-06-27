@@ -9,7 +9,7 @@ const fullSchema = {
 };
 
 // Type the database properly
-type Database = ReturnType<typeof drizzle<typeof fullSchema>>;
+export type Database = ReturnType<typeof drizzle<typeof fullSchema>>;
 let db: Database;
 
 export function getDB(env: Env) {

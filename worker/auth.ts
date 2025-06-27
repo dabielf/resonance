@@ -6,6 +6,7 @@ import {
 import { eq } from "drizzle-orm";
 import { getDB } from "./db";
 import { users } from "./db/schema";
+import { KeyManager } from "./crypto/key-manager";
 
 type VerifyTokenResponse = {
 	userId: string | null;
@@ -69,13 +70,20 @@ export async function getDbUserId(
 		console.log("User not found");
 		const clerkUser = await clerkClient.users.getUser(userId);
 		console.log("Clerk User", clerkUser);
+		
+		// Generate encryption key for the new user
+		const keyManager = new KeyManager();
+		const userKey = await keyManager.generateUserKey();
+		const masterKey = await keyManager.deriveKeyFromSecret(env.MASTER_ENCRYPTION_KEY);
+		const encryptedUserKey = await keyManager.encryptUserKey(userKey, masterKey);
+		
 		const dbUser = await db
 			.insert(users)
 			.values({
 				email: clerkUser.emailAddresses[0].emailAddress,
 				name: clerkUser.firstName,
 				identityToken: userId as string,
-				encryptionKey: "dummy",
+				encryptionKey: encryptedUserKey,
 			})
 			.returning();
 		console.log("Created User", dbUser);

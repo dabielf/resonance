@@ -14,7 +14,12 @@ export const gwRouter = t.router({
   generateContent: t.procedure
     .input(z.object({ topic: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      const apiKey = ctx.env.GOOGLE_GENERATIVE_AI_API_KEY;
+      // Get the user's encrypted Gemini API key
+      const apiKey = await ctx.crypto.getApiKey('gemini');
+      
+      if (!apiKey) {
+        throw new Error('MISSING_API_KEY');
+      }
 
       const response = await generateContent({ apiKey, psychologyProfile, writingProfile, personaProfile, topic: input.topic });
 

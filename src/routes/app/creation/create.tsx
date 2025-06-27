@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,15 +54,24 @@ export default function Generator() {
 						</div>
 					) : error ? (
 						<div className="m-4 rounded-md bg-red-50 p-4 text-red-700">
-							<p className="font-medium">Error loading data</p>
-							<p>
-								There was a problem fetching the table data. We'll automatically
-								retry soon.
-							</p>
-							<div className="mt-2 flex items-center">
-								<div className="h-4 w-4 animate-spin rounded-full border-2 border-red-700 border-t-transparent"></div>
-								<span className="ml-2 text-sm">Retrying...</span>
-							</div>
+							{error === 'MISSING_API_KEY' ? (
+								<>
+									<p className="font-medium">Gemini API Key Required</p>
+									<p className="mb-3">
+										You need to configure your Gemini API key to generate content.
+									</p>
+									<Link to="/app/settings">
+										<Button variant="outline" size="sm">
+											Go to Settings
+										</Button>
+									</Link>
+								</>
+							) : (
+								<>
+									<p className="font-medium">Error generating content</p>
+									<p className="text-sm">{error}</p>
+								</>
+							)}
 						</div>
 					) : (
 						content && <Textarea value={content} />
