@@ -38,8 +38,12 @@ const data = {
 					url: "/app/creation/writers",
 				},
 				{
-					title: "Create",
+					title: "Generate",
 					url: "/app/creation/create",
+				},
+				{
+					title: "Contents",
+					url: "/app/creation/contents",
 				},
 				{
 					title: "Profiles",

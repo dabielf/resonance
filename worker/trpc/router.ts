@@ -1,7 +1,8 @@
-import { contentRouter } from "./routes/content-router";
-import { gwRouter } from "./routes/example-table-data";
-import { userSettingsRouter } from "./routes/user-settings";
 import { t } from "./trpc-instance";
+
+const { contentRouter } = await import("./routes/content-router");
+const { gwRouter } = await import("./routes/example-table-data");
+const { userSettingsRouter } = await import("./routes/user-settings");
 
 export const appRouter = t.router({
 	contentRouter,

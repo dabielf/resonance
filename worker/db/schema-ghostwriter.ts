@@ -27,11 +27,13 @@ export const ghostwriters = sqliteTable(
 		writingCritic: text("writing_critic"),
 		humanInputWritingCritic: text("human_input_writing_critic"),
 		trainingIterations: integer("training_iterations").notNull().default(0),
+		deletedAt: text("deleted_at"), // For soft delete support
 		createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
 		updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
 	},
 	(table) => [
 		index("ghostwriter_user_id_idx").on(table.userId),
+		index("ghostwriter_deleted_at_idx").on(table.deletedAt), // Index for filtering soft deletes
 		uniqueIndex("ghostwriter_user_name_idx").on(table.userId, table.name), // unique per user
 	],
 );
@@ -80,7 +82,7 @@ export const originalContents = sqliteTable(
 	"original_contents",
 	{
 		id: integer("id").primaryKey({ autoIncrement: true }),
-		ghostwriterId: integer("ghostwriter_id").notNull().references(() => ghostwriters.id),
+		ghostwriterId: integer("ghostwriter_id").references(() => ghostwriters.id), // Made nullable for safe delete
 		content: text("content").notNull(),
 		createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
 	},
@@ -111,8 +113,8 @@ export const generatedContents = sqliteTable(
 		id: integer("id").primaryKey({ autoIncrement: true }),
 		userId: integer("user_id").notNull().references(() => users.id),
 		ghostwriterId: integer("ghostwriter_id").references(() => ghostwriters.id), // optional
-		psyProfileId: integer("psy_profile_id").notNull().references(() => psyProfiles.id),
-		writingProfileId: integer("writing_profile_id").notNull().references(() => writingProfiles.id),
+		psyProfileId: integer("psy_profile_id").references(() => psyProfiles.id), // Made nullable for safe delete
+		writingProfileId: integer("writing_profile_id").references(() => writingProfiles.id), // Made nullable for safe delete
 		personaId: integer("persona_id").references(() => personas.id), // optional
 		prompt: text("prompt").notNull(),
 		content: text("content").notNull(),

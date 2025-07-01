@@ -63,6 +63,7 @@ export type ApiResponseType<T> =
 export const GhostwriterSchema = z.object({
 	id: z.number(),
 	name: z.string(),
+	description: z.string().nullable(),
 	userId: z.number(),
 	psyProfileId: z.number().nullable(),
 	writingProfileId: z.number().nullable(),
@@ -149,13 +150,11 @@ export const InsightSchema = z.object({
 // =====================================================
 
 export const CreateGhostwriterInput = z.object({
-	userId: z.number(),
 	name: z.string().min(1, "Name is required"),
 	description: z.string().optional(),
 });
 
 export const CreateOriginalContentInput = z.object({
-	userId: z.number(),
 	content: z.string().min(1, "Content is required"),
 	gwId: z.number().optional(),
 });
@@ -164,6 +163,13 @@ export const CreateProfileInput = z.object({
 	name: z.string().min(1, "Name is required"),
 	content: z.string().optional(),
 	gwId: z.number().optional(),
+});
+
+export const UpdateProfileInput = z.object({
+	id: z.number().min(1, "Profile ID is required"),
+	name: z.string().min(1, "Name is required"),
+	description: z.string().optional(),
+	content: z.string().optional(),
 });
 
 export const GenerateContentInput = z
@@ -191,6 +197,13 @@ export const SaveContentInput = z.object({
 });
 
 export const CreatePersonaInput = z.object({
+	name: z.string().min(1, "Name is required"),
+	description: z.string().optional(),
+	content: z.string().min(1, "Content is required"),
+});
+
+export const UpdatePersonaInput = z.object({
+	id: z.number().min(1, "Persona ID is required"),
 	name: z.string().min(1, "Name is required"),
 	description: z.string().optional(),
 	content: z.string().min(1, "Content is required"),
