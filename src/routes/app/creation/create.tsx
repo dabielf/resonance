@@ -2,7 +2,6 @@ import {
 	IconBookmark,
 	IconBrain,
 	IconCopy,
-	IconDots,
 	IconDownload,
 	IconEdit,
 	IconEye,
@@ -74,12 +73,12 @@ export default function ContentGenerator() {
 
 	// Fetch user data
 	const {
-		data: userData,
+		data,
 		isLoading: isLoadingData,
 		error: dataError,
 	} = useQuery(trpc.contentRouter.getUserData.queryOptions());
 
-	const user = userData?.success ? userData.data : null;
+	const user = data;
 
 	// Filter complete writers (those with both profiles)
 	const completeWriters =
@@ -91,11 +90,9 @@ export default function ContentGenerator() {
 	const generateContentMutation = useMutation(
 		trpc.contentRouter.generateContent.mutationOptions({
 			onSuccess: (data) => {
-				if (data.success) {
-					setGeneratedContent(data.data);
-					setEditedContent(data.data);
-					setContentMode("display");
-				}
+				setGeneratedContent(data);
+				setEditedContent(data);
+				setContentMode("display");
 			},
 			onError: (error) => {
 				console.error("Generation failed:", error);
@@ -107,12 +104,10 @@ export default function ContentGenerator() {
 	const saveContentMutation = useMutation(
 		trpc.contentRouter.saveGeneratedContent.mutationOptions({
 			onSuccess: (data) => {
-				if (data.success) {
-					toast.success("Content saved successfully");
-					queryClient.invalidateQueries({
-						queryKey: trpc.contentRouter.listGeneratedContents.queryKey(),
-					});
-				}
+				toast.success("Content saved successfully");
+				queryClient.invalidateQueries({
+					queryKey: trpc.contentRouter.listGeneratedContents.queryKey(),
+				});
 			},
 			onError: (error) => {
 				toast.error("Failed to save content");

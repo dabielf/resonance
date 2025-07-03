@@ -31,7 +31,7 @@ function RouteComponent() {
 		trpc.contentRouter.listGhostwriters.queryOptions(),
 	);
 
-	const writers = data?.success ? data.data : [];
+	const writers = data || [];
 
 	const handleCreateWriter = () => {
 		navigate({ to: "/app/creation/writers/new" });

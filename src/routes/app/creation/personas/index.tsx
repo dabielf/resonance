@@ -31,7 +31,7 @@ function RouteComponent() {
 		trpc.contentRouter.listPersonas.queryOptions(),
 	);
 
-	const personas = data?.success ? data.data : [];
+	const personas = data || [];
 
 	// Delete mutation
 	const deletePersonaMutation = useMutation(

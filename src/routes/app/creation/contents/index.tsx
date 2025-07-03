@@ -51,7 +51,7 @@ function RouteComponent() {
 		trpc.contentRouter.listGeneratedContents.queryOptions(),
 	);
 
-	const contents = data?.success ? data.data : [];
+	const contents = data || [];
 
 	// Delete content mutation
 	const deleteContentMutation = useMutation(

@@ -54,7 +54,7 @@ function RouteComponent() {
 		}),
 	);
 
-	const content = data?.success ? data.data : null;
+	const content = data;
 
 	// Update content mutation
 	const updateContentMutation = useMutation(

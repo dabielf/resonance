@@ -56,17 +56,13 @@ export function WriterCreationWizard() {
 		trpc.contentRouter.createGhostwriter.mutationOptions({
 			onSuccess: async (data) => {
 				console.log("Ghostwriter created successfully:", data);
-				if (data.success && data.data?.id) {
-					setGhostwriterId(data.data.id);
-					setProcessingStage("uploading");
-					// Start uploading content
-					await addOriginalContentMutation.mutateAsync({
-						gwId: data.data.id,
-						content: contentSamples.trim(),
-					});
-				} else {
-					throw new Error("Failed to create ghostwriter");
-				}
+				setGhostwriterId(data.id);
+				setProcessingStage("uploading");
+				// Start uploading content
+				await addOriginalContentMutation.mutateAsync({
+					gwId: data.id,
+					content: contentSamples.trim(),
+				});
 			},
 			onError: (error) => {
 				console.error("Failed to create ghostwriter:", error);
@@ -80,7 +76,7 @@ export function WriterCreationWizard() {
 		trpc.contentRouter.addOriginalContents.mutationOptions({
 			onSuccess: async (data) => {
 				console.log("Original content added successfully:", data);
-				if (data.success && ghostwriterId) {
+				if (ghostwriterId) {
 					setProcessingStage("psychology");
 					// Start creating psychology profile
 					await createPsyProfileMutation.mutateAsync({
@@ -100,7 +96,7 @@ export function WriterCreationWizard() {
 		trpc.contentRouter.createPsyProfile.mutationOptions({
 			onSuccess: async (data) => {
 				console.log("Psychology profile created successfully:", data);
-				if (data.success && ghostwriterId) {
+				if (ghostwriterId) {
 					setProcessingStage("writing");
 					// Start creating writing profile
 					await createWritingProfileMutation.mutateAsync({
@@ -122,16 +118,14 @@ export function WriterCreationWizard() {
 		trpc.contentRouter.createWritingProfile.mutationOptions({
 			onSuccess: async (data) => {
 				console.log("Writing profile created successfully:", data);
-				if (data.success) {
-					setProcessingStage("complete");
-					toast.success("Writer created successfully with all profiles!");
-					queryClient.invalidateQueries({
-						queryKey: trpc.contentRouter.listGhostwriters.queryKey(),
-					});
-					setTimeout(() => {
-						navigate({ to: "/app/creation/writers" });
-					}, 1500);
-				}
+				setProcessingStage("complete");
+				toast.success("Writer created successfully with all profiles!");
+				queryClient.invalidateQueries({
+					queryKey: trpc.contentRouter.listGhostwriters.queryKey(),
+				});
+				setTimeout(() => {
+					navigate({ to: "/app/creation/writers" });
+				}, 1500);
 			},
 			onError: (error) => {
 				console.error("Failed to create writing profile:", error);

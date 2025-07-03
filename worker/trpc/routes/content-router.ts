@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { getDB } from "../../db";
@@ -12,27 +13,17 @@ import {
 	writingProfiles,
 } from "../../db/schema-ghostwriter";
 import {
-	type ApiResponseErrorType,
-	type ApiResponseSuccessType,
 	CreateGhostwriterInput,
 	CreateOriginalContentInput,
 	CreatePersonaInput,
 	CreateProfileInput,
 	GenerateContentInput,
 	type GeneratedContent,
-	type GeneratedContentWithRelations,
-	type Ghostwriter,
-	type ListAllResponse,
-	type Persona,
-	type PsyProfile,
-	type PsyProfileWithRelations,
 	SaveContentInput,
 	SaveProfileInput,
 	UpdateGeneratedContentInput,
 	UpdatePersonaInput,
 	UpdateProfileInput,
-	type WritingProfile,
-	type WritingProfileWithRelations,
 } from "../../types/gw";
 import { t } from "../trpc-instance";
 
@@ -53,7 +44,7 @@ const { writeProfileModifier } = await import(
 export const contentRouter = t.router({
 	getUserData: t.procedure.query(async ({ ctx }) => {
 		const db = getDB(ctx.env);
-		const user = await db.query.users.findFirst({
+		return await db.query.users.findFirst({
 			where: eq(users.id, ctx.userId),
 			columns: {
 				id: true,
@@ -97,21 +88,6 @@ export const contentRouter = t.router({
 				},
 			},
 		});
-		if (!user) {
-			return {
-				success: false,
-				error: {
-					code: "NOT_FOUND",
-					message: "User not found",
-					details: "User not found",
-				},
-			} as ApiResponseErrorType;
-		}
-
-		return {
-			success: true,
-			data: user,
-		} as ApiResponseSuccessType<ListAllResponse>;
 	}),
 	listGhostwriters: t.procedure.query(async ({ ctx }) => {
 		const db = getDB(ctx.env);
@@ -121,58 +97,76 @@ export const contentRouter = t.router({
 				isNull(ghostwriters.deletedAt), // Filter out soft-deleted ghostwriters
 			),
 		});
-		return {
-			success: true,
-			data: writers,
-		} as ApiResponseSuccessType<Ghostwriter[]>;
+		return writers;
 	}),
 	listPsyProfiles: t.procedure.query(async ({ ctx }) => {
 		const db = getDB(ctx.env);
 		const data = await db.query.psyProfiles.findMany({
 			where: eq(psyProfiles.userId, ctx.userId),
 		});
-		return {
-			success: true,
-			data: data,
-		} as ApiResponseSuccessType<PsyProfile[]>;
+		return data;
 	}),
 	listWritingProfiles: t.procedure.query(async ({ ctx }) => {
 		const db = getDB(ctx.env);
 		const data = await db.query.writingProfiles.findMany({
 			where: eq(writingProfiles.userId, ctx.userId),
 		});
-		return {
-			success: true,
-			data: data,
-		} as ApiResponseSuccessType<WritingProfile[]>;
+		return data;
 	}),
 	listPersonas: t.procedure.query(async ({ ctx }) => {
 		const db = getDB(ctx.env);
-		try {
-			const data = await db.query.personas.findMany({
-				where: eq(personas.userId, ctx.userId),
-			});
-			return {
-				success: true,
-				data: data,
-			} as ApiResponseSuccessType<Persona[]>;
-		} catch (error) {
-			return {
-				success: false,
-				error: {
-					code: "INTERNAL_SERVER_ERROR",
-					message: "Failed to get personas",
-					details: (error as Error).message,
-				},
-			} as ApiResponseErrorType;
-		}
+		const data = await db.query.personas.findMany({
+			where: eq(personas.userId, ctx.userId),
+		});
+		return data;
 	}),
 	listGeneratedContents: t.procedure.query(async ({ ctx }) => {
 		const db = getDB(ctx.env);
-		try {
-			const data = await db.query.generatedContents.findMany({
-				where: eq(generatedContents.userId, ctx.userId),
-				orderBy: [desc(generatedContents.createdAt)],
+		const data = await db.query.generatedContents.findMany({
+			where: eq(generatedContents.userId, ctx.userId),
+			orderBy: [desc(generatedContents.createdAt)],
+			with: {
+				writingProfile: {
+					columns: { id: true, name: true },
+				},
+				psyProfile: {
+					columns: { id: true, name: true },
+				},
+				persona: {
+					columns: { id: true, name: true },
+				},
+				ghostwriter: {
+					columns: { id: true, name: true },
+				},
+			},
+		});
+		return data;
+	}),
+	getPersona: t.procedure
+		.input(z.object({ id: z.number().min(1, "Persona ID is required") }))
+		.query(async ({ input: { id }, ctx }) => {
+			const db = getDB(ctx.env);
+			const data = await db.query.personas.findFirst({
+				where: and(eq(personas.id, id), eq(personas.userId, ctx.userId)),
+			});
+			
+			if (!data) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Persona not found or you don't have permission to access it",
+				});
+			}
+			
+			return data;
+		}),
+	getGeneratedContent: t.procedure
+		.input(
+			z.object({ id: z.number().min(1, "Generated content ID is required") }),
+		)
+		.query(async ({ input: { id }, ctx }) => {
+			const db = getDB(ctx.env);
+			const data = await db.query.generatedContents.findFirst({
+				where: and(eq(generatedContents.id, id), eq(generatedContents.userId, ctx.userId)),
 				with: {
 					writingProfile: {
 						columns: { id: true, name: true },
@@ -188,133 +182,40 @@ export const contentRouter = t.router({
 					},
 				},
 			});
-			return {
-				success: true,
-				data: data,
-			} as ApiResponseSuccessType<GeneratedContentWithRelations[]>;
-		} catch (error) {
-			return {
-				success: false,
-				error: {
-					code: "INTERNAL_SERVER_ERROR",
-					message: "Failed to get generated contents",
-					details: (error as Error).message,
-				},
-			} as ApiResponseErrorType;
-		}
-	}),
-	getPersona: t.procedure
-		.input(z.object({ id: z.number().min(1, "Persona ID is required") }))
-		.query(async ({ input: { id }, ctx }) => {
-			const db = getDB(ctx.env);
-			if (!id) {
-				return {
-					success: false,
-					error: {
-						code: "BAD_REQUEST",
-						message: "Persona ID is required",
-						details: "Please provide a persona ID",
-					},
-				} as ApiResponseErrorType;
-			}
-			try {
-				const data = await db.query.personas.findFirst({
-					where: eq(personas.id, id),
+			
+			if (!data) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Generated content not found or you don't have permission to access it",
 				});
-				return {
-					success: true,
-					data: data,
-				} as ApiResponseSuccessType<Persona>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to get persona",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
 			}
-		}),
-	getGeneratedContent: t.procedure
-		.input(
-			z.object({ id: z.number().min(1, "Generated content ID is required") }),
-		)
-		.query(async ({ input: { id }, ctx }) => {
-			const db = getDB(ctx.env);
-			if (!id) {
-				return {
-					success: false,
-					error: {
-						code: "BAD_REQUEST",
-						message: "Generated content ID is required",
-						details: "Please provide a generated content ID",
-					},
-				} as ApiResponseErrorType;
-			}
-			try {
-				const data = await db.query.generatedContents.findFirst({
-					where: eq(generatedContents.id, id),
-					with: {
-						writingProfile: {
-							columns: { id: true, name: true },
-						},
-						psyProfile: {
-							columns: { id: true, name: true },
-						},
-						persona: {
-							columns: { id: true, name: true },
-						},
-						ghostwriter: {
-							columns: { id: true, name: true },
-						},
-					},
-				});
-				return {
-					success: true,
-					data: data,
-				} as ApiResponseSuccessType<GeneratedContentWithRelations>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to get generated content",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
-			}
+			
+			return data;
 		}),
 	getGhostwriter: t.procedure
 		.input(z.object({ id: z.number().min(1, "Ghostwriter ID is required") }))
 		.query(async ({ input: { id }, ctx }) => {
 			const db = getDB(ctx.env);
-			try {
-				const data = await db.query.ghostwriters.findFirst({
-					where: eq(ghostwriters.id, id),
-					with: {
-						currentPsyProfile: {
-							columns: { id: true, name: true, content: true },
-						},
-						currentWritingProfile: {
-							columns: { id: true, name: true, content: true },
-						},
+			const data = await db.query.ghostwriters.findFirst({
+				where: and(eq(ghostwriters.id, id), eq(ghostwriters.userId, ctx.userId)),
+				with: {
+					currentPsyProfile: {
+						columns: { id: true, name: true, content: true },
 					},
+					currentWritingProfile: {
+						columns: { id: true, name: true, content: true },
+					},
+				},
+			});
+			
+			if (!data) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Ghostwriter not found or you don't have permission to access it",
 				});
-				return {
-					success: true,
-					data: data,
-				} as ApiResponseSuccessType<Ghostwriter>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to get ghostwriter",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
 			}
+			
+			return data;
 		}),
 	getPsyProfile: t.procedure
 		.input(
@@ -322,29 +223,23 @@ export const contentRouter = t.router({
 		)
 		.query(async ({ input: { id }, ctx }) => {
 			const db = getDB(ctx.env);
-			try {
-				const data = await db.query.psyProfiles.findFirst({
-					where: eq(psyProfiles.id, id),
-					with: {
-						ghostwriter: {
-							columns: { id: true, name: true },
-						},
+			const data = await db.query.psyProfiles.findFirst({
+				where: and(eq(psyProfiles.id, id), eq(psyProfiles.userId, ctx.userId)),
+				with: {
+					ghostwriter: {
+						columns: { id: true, name: true },
 					},
+				},
+			});
+			
+			if (!data) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Psychology profile not found or you don't have permission to access it",
 				});
-				return {
-					success: true,
-					data: data,
-				} as ApiResponseSuccessType<PsyProfileWithRelations>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to get psychology profile",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
 			}
+			
+			return data;
 		}),
 	getWritingProfile: t.procedure
 		.input(
@@ -352,148 +247,94 @@ export const contentRouter = t.router({
 		)
 		.query(async ({ input: { id }, ctx }) => {
 			const db = getDB(ctx.env);
-			try {
-				const data = await db.query.writingProfiles.findFirst({
-					where: eq(writingProfiles.id, id),
-					with: {
-						ghostwriter: {
-							columns: { id: true, name: true },
-						},
+			const data = await db.query.writingProfiles.findFirst({
+				where: and(eq(writingProfiles.id, id), eq(writingProfiles.userId, ctx.userId)),
+				with: {
+					ghostwriter: {
+						columns: { id: true, name: true },
 					},
+				},
+			});
+			
+			if (!data) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Writing profile not found or you don't have permission to access it",
 				});
-				return {
-					success: true,
-					data: data,
-				} as ApiResponseSuccessType<WritingProfileWithRelations>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to get writing profile",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
 			}
+			
+			return data;
 		}),
 	savePersona: t.procedure
 		.input(CreatePersonaInput)
 		.mutation(async ({ input: { name, description, content }, ctx }) => {
 			const db = getDB(ctx.env);
-			try {
-				const persona = await db
-					.insert(personas)
-					.values({
-						userId: ctx.userId,
-						name,
-						description: description || "",
-						content,
-					})
-					.returning();
+			const persona = await db
+				.insert(personas)
+				.values({
+					userId: ctx.userId,
+					name,
+					description: description || "",
+					content,
+				})
+				.returning();
 
-				return {
-					success: true,
-					data: persona[0],
-				} as ApiResponseSuccessType<Persona>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to create persona",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
-			}
+			return persona[0];
 		}),
 	savePsyProfile: t.procedure
 		.input(SaveProfileInput)
 		.mutation(async ({ input: { name, content }, ctx }) => {
 			const db = getDB(ctx.env);
-			try {
-				const profile = await db
-					.insert(psyProfiles)
-					.values({
-						userId: ctx.userId,
-						ghostwriterId: null,
-						name,
-						content,
-					})
-					.returning();
+			const profile = await db
+				.insert(psyProfiles)
+				.values({
+					userId: ctx.userId,
+					ghostwriterId: null,
+					name,
+					content,
+				})
+				.returning();
 
-				return {
-					success: true,
-					data: profile[0],
-				} as ApiResponseSuccessType<PsyProfile>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to create psychology profile",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
-			}
+			return profile[0];
 		}),
 	saveWritingProfile: t.procedure
 		.input(SaveProfileInput)
 		.mutation(async ({ input: { name, content }, ctx }) => {
 			const db = getDB(ctx.env);
-			try {
-				const profile = await db
-					.insert(writingProfiles)
-					.values({
-						userId: ctx.userId,
-						ghostwriterId: null,
-						name,
-						content,
-					})
-					.returning();
+			const profile = await db
+				.insert(writingProfiles)
+				.values({
+					userId: ctx.userId,
+					ghostwriterId: null,
+					name,
+					content,
+				})
+				.returning();
 
-				return {
-					success: true,
-					data: profile[0],
-				} as ApiResponseSuccessType<WritingProfile>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to create writing profile",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
-			}
+			return profile[0];
 		}),
 	updatePersona: t.procedure
 		.input(UpdatePersonaInput)
 		.mutation(async ({ input: { id, name, description, content }, ctx }) => {
 			const db = getDB(ctx.env);
-			try {
-				const persona = await db
-					.update(personas)
-					.set({
-						name,
-						description: description || "",
-						content,
-					})
-					.where(eq(personas.id, id))
-					.returning();
-				return {
-					success: true,
-					data: persona[0],
-				} as ApiResponseSuccessType<Persona>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to update persona",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
+			const persona = await db
+				.update(personas)
+				.set({
+					name,
+					description: description || "",
+					content,
+				})
+				.where(and(eq(personas.id, id), eq(personas.userId, ctx.userId)))
+				.returning();
+			
+			if (persona.length === 0) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Persona not found or you don't have permission to update it",
+				});
 			}
+			
+			return persona[0];
 		}),
 	updateGhostwriter: t.procedure
 		.input(
@@ -511,57 +352,89 @@ export const contentRouter = t.router({
 				ctx,
 			}) => {
 				const db = getDB(ctx.env);
-				try {
-					const updateData: Partial<typeof ghostwriters.$inferInsert> = {};
-					if (name !== undefined) updateData.name = name;
-					if (description !== undefined) updateData.description = description;
-					if (psyProfileId !== undefined)
-						updateData.psyProfileId = psyProfileId;
-					if (writingProfileId !== undefined)
-						updateData.writingProfileId = writingProfileId;
+				const updateData: Partial<typeof ghostwriters.$inferInsert> = {};
+				if (name !== undefined) updateData.name = name;
+				if (description !== undefined) updateData.description = description;
+				if (psyProfileId !== undefined)
+					updateData.psyProfileId = psyProfileId;
+				if (writingProfileId !== undefined)
+					updateData.writingProfileId = writingProfileId;
 
-					const ghostwriter = await db
-						.update(ghostwriters)
-						.set(updateData)
-						.where(eq(ghostwriters.id, id))
-						.returning();
+				const ghostwriter = await db
+					.update(ghostwriters)
+					.set(updateData)
+					.where(and(eq(ghostwriters.id, id), eq(ghostwriters.userId, ctx.userId)))
+					.returning();
 
-					return {
-						success: true,
-						data: ghostwriter[0],
-					} as ApiResponseSuccessType<Ghostwriter>;
-				} catch (error) {
-					return {
-						success: false,
-						error: {
-							code: "INTERNAL_SERVER_ERROR",
-							message: "Failed to update ghostwriter",
-							details: (error as Error).message,
-						},
-					} as ApiResponseErrorType;
+				if (ghostwriter.length === 0) {
+					throw new TRPCError({
+						code: "NOT_FOUND",
+						message: "Ghostwriter not found or you don't have permission to update it",
+					});
 				}
+
+				return ghostwriter[0];
 			},
 		),
 	deletePersona: t.procedure
 		.input(z.object({ id: z.number().min(1, "Persona ID is required") }))
 		.mutation(async ({ input: { id }, ctx }) => {
 			const db = getDB(ctx.env);
-			try {
-				await db.delete(personas).where(eq(personas.id, id));
-				return {
-					success: true,
-					data: id,
-				} as ApiResponseSuccessType<number>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to delete persona",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
+			
+			// Verify ownership before deletion
+			const persona = await db.select().from(personas)
+				.where(and(eq(personas.id, id), eq(personas.userId, ctx.userId)))
+				.limit(1);
+
+			if (persona.length === 0) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Persona not found or you don't have permission to delete it",
+				});
 			}
+
+			// Use batch API for atomic operations (D1 best practice)
+			const batchResult = await db.batch([
+				// 1. Nullify optional references in generatedContents (only for this user)
+				db
+					.update(generatedContents)
+					.set({ personaId: null })
+					.where(
+						and(
+							eq(generatedContents.personaId, id),
+							eq(generatedContents.userId, ctx.userId),
+						),
+					),
+
+				// 2. Delete dependent insights (personaId is NOT NULL, only for this user)
+				db
+					.delete(insights)
+					.where(
+						and(
+							eq(insights.personaId, id),
+							eq(insights.userId, ctx.userId),
+						),
+					),
+
+				// 3. Delete the persona itself (with user check)
+				db
+					.delete(personas)
+					.where(
+						and(eq(personas.id, id), eq(personas.userId, ctx.userId)),
+					)
+					.returning({ id: personas.id }),
+			]);
+
+			// Check if deletion was successful
+			const deletedPersona = batchResult[2] as { id: number }[];
+			if (deletedPersona.length === 0) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: "Failed to delete persona",
+				});
+			}
+
+			return deletedPersona[0].id;
 		}),
 	saveGeneratedContent: t.procedure
 		.input(SaveContentInput)
@@ -580,36 +453,22 @@ export const contentRouter = t.router({
 				ctx,
 			}) => {
 				const db = getDB(ctx.env);
-				try {
-					const generatedContent = await db
-						.insert(generatedContents)
-						.values({
-							userId: ctx.userId,
-							ghostwriterId: gwId || null,
-							psyProfileId,
-							writingProfileId,
-							personaId: personaProfileId || null,
-							prompt,
-							content,
-							userFeedBack: userFeedback || null,
-							isTrainingData: isTrainingData || false,
-						})
-						.returning();
+				const generatedContent = await db
+					.insert(generatedContents)
+					.values({
+						userId: ctx.userId,
+						ghostwriterId: gwId || null,
+						psyProfileId,
+						writingProfileId,
+						personaId: personaProfileId || null,
+						prompt,
+						content,
+						userFeedBack: userFeedback || null,
+						isTrainingData: isTrainingData || false,
+					})
+					.returning();
 
-					return {
-						success: true,
-						data: generatedContent[0],
-					} as ApiResponseSuccessType<GeneratedContent>;
-				} catch (error) {
-					return {
-						success: false,
-						error: {
-							code: "INTERNAL_SERVER_ERROR",
-							message: "Failed to save generated content",
-							details: (error as Error).message,
-						},
-					} as ApiResponseErrorType;
-				}
+				return generatedContent[0];
 			},
 		),
 	updateGeneratedContent: t.procedure
@@ -621,34 +480,27 @@ export const contentRouter = t.router({
 		.mutation(
 			async ({ input: { id, content, userFeedBack, isTrainingData }, ctx }) => {
 				const db = getDB(ctx.env);
-				try {
-					const updateData: Partial<GeneratedContent> = {};
-					if (content !== undefined) updateData.content = content;
-					if (userFeedBack !== undefined)
-						updateData.userFeedBack = userFeedBack;
-					if (isTrainingData !== undefined)
-						updateData.isTrainingData = isTrainingData;
+				const updateData: Partial<GeneratedContent> = {};
+				if (content !== undefined) updateData.content = content;
+				if (userFeedBack !== undefined)
+					updateData.userFeedBack = userFeedBack;
+				if (isTrainingData !== undefined)
+					updateData.isTrainingData = isTrainingData;
 
-					const generatedContent = await db
-						.update(generatedContents)
-						.set(updateData)
-						.where(eq(generatedContents.id, id))
-						.returning();
+				const generatedContent = await db
+					.update(generatedContents)
+					.set(updateData)
+					.where(and(eq(generatedContents.id, id), eq(generatedContents.userId, ctx.userId)))
+					.returning();
 
-					return {
-						success: true,
-						data: generatedContent[0],
-					} as ApiResponseSuccessType<GeneratedContent>;
-				} catch (error) {
-					return {
-						success: false,
-						error: {
-							code: "INTERNAL_SERVER_ERROR",
-							message: "Failed to update generated content",
-							details: (error as Error).message,
-						},
-					} as ApiResponseErrorType;
+				if (generatedContent.length === 0) {
+					throw new TRPCError({
+						code: "NOT_FOUND",
+						message: "Generated content not found or you don't have permission to update it",
+					});
 				}
+
+				return generatedContent[0];
 			},
 		),
 	deleteGeneratedContent: t.procedure
@@ -657,49 +509,47 @@ export const contentRouter = t.router({
 		)
 		.mutation(async ({ input: { id }, ctx }) => {
 			const db = getDB(ctx.env);
-			try {
-				await db.delete(generatedContents).where(eq(generatedContents.id, id));
-				return {
-					success: true,
-					data: id,
-				} as ApiResponseSuccessType<number>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to delete generated content",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
+			
+			// Verify ownership before deletion
+			const content = await db.select().from(generatedContents)
+				.where(and(eq(generatedContents.id, id), eq(generatedContents.userId, ctx.userId)))
+				.limit(1);
+
+			if (content.length === 0) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Generated content not found or you don't have permission to delete it",
+				});
 			}
+
+			await db.delete(generatedContents).where(eq(generatedContents.id, id));
+			return id;
 		}),
 	deleteGhostwriter: t.procedure
 		.input(z.object({ id: z.number().min(1, "Ghostwriter ID is required") }))
 		.mutation(async ({ input: { id }, ctx }) => {
 			const db = getDB(ctx.env);
-			try {
-				// Soft delete: set deletedAt timestamp
-				const ghostwriter = await db
-					.update(ghostwriters)
-					.set({ deletedAt: new Date().toISOString() })
-					.where(eq(ghostwriters.id, id))
-					.returning();
+			
+			// Verify ownership before deletion
+			const ghostwriter = await db.select().from(ghostwriters)
+				.where(and(eq(ghostwriters.id, id), eq(ghostwriters.userId, ctx.userId)))
+				.limit(1);
 
-				return {
-					success: true,
-					data: ghostwriter[0],
-				} as ApiResponseSuccessType<Ghostwriter>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to delete ghostwriter",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
+			if (ghostwriter.length === 0) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Ghostwriter not found or you don't have permission to delete it",
+				});
 			}
+
+			// Soft delete: set deletedAt timestamp
+			const updatedGhostwriter = await db
+				.update(ghostwriters)
+				.set({ deletedAt: new Date().toISOString() })
+				.where(eq(ghostwriters.id, id))
+				.returning();
+
+			return updatedGhostwriter[0];
 		}),
 	deletePsyProfile: t.procedure
 		.input(
@@ -707,90 +557,65 @@ export const contentRouter = t.router({
 		)
 		.mutation(async ({ input: { id }, ctx }) => {
 			const db = getDB(ctx.env);
-			try {
-				// Start transaction to handle cascade nullify safely
-				const deletedId = await db.transaction(async (tx) => {
-					// First, verify the profile exists and belongs to the user
-					const profile = await tx
-						.select()
-						.from(psyProfiles)
-						.where(
-							and(
-								eq(psyProfiles.id, id),
-								eq(psyProfiles.userId, ctx.userId)
-							)
-						)
-						.limit(1);
 
-					if (profile.length === 0) {
-						throw new Error("Profile not found or unauthorized");
-					}
+			// First, verify the profile exists and belongs to the user
+			const profile = await db
+				.select()
+				.from(psyProfiles)
+				.where(and(eq(psyProfiles.id, id), eq(psyProfiles.userId, ctx.userId)))
+				.limit(1);
 
-					// 1. Nullify references in generatedContents (only for this user)
-					await tx
-						.update(generatedContents)
-						.set({ psyProfileId: null })
-						.where(
-							and(
-								eq(generatedContents.psyProfileId, id),
-								eq(generatedContents.userId, ctx.userId)
-							)
-						);
-
-					// 2. Nullify references in ghostwriters (only for this user)
-					await tx
-						.update(ghostwriters)
-						.set({ psyProfileId: null })
-						.where(
-							and(
-								eq(ghostwriters.psyProfileId, id),
-								eq(ghostwriters.userId, ctx.userId)
-							)
-						);
-
-					// 3. Delete the profile itself (with user check)
-					const deleted = await tx
-						.delete(psyProfiles)
-						.where(
-							and(
-								eq(psyProfiles.id, id),
-								eq(psyProfiles.userId, ctx.userId)
-							)
-						)
-						.returning({ id: psyProfiles.id });
-
-					if (deleted.length === 0) {
-						throw new Error("Failed to delete profile");
-					}
-
-					return deleted[0].id;
+			if (profile.length === 0) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message:
+						"Psychology profile not found or you don't have permission to delete it",
 				});
-
-				return {
-					success: true,
-					data: deletedId,
-				} as ApiResponseSuccessType<number>;
-			} catch (error) {
-				const errorMessage = (error as Error).message;
-				if (errorMessage === "Profile not found or unauthorized") {
-					return {
-						success: false,
-						error: {
-							code: "NOT_FOUND",
-							message: "Psychology profile not found or you don't have permission to delete it",
-							details: errorMessage,
-						},
-					} as ApiResponseErrorType;
-				}
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to delete psychology profile",
-						details: errorMessage,
-					},
-				} as ApiResponseErrorType;
 			}
+
+			// Use batch API for atomic operations (D1 best practice)
+			const batchResult = await db.batch([
+				// 1. Nullify references in generatedContents (only for this user)
+				db
+					.update(generatedContents)
+					.set({ psyProfileId: null })
+					.where(
+						and(
+							eq(generatedContents.psyProfileId, id),
+							eq(generatedContents.userId, ctx.userId),
+						),
+					),
+
+				// 2. Nullify references in ghostwriters (only for this user)
+				db
+					.update(ghostwriters)
+					.set({ psyProfileId: null })
+					.where(
+						and(
+							eq(ghostwriters.psyProfileId, id),
+							eq(ghostwriters.userId, ctx.userId),
+						),
+					),
+
+				// 3. Delete the profile itself (with user check)
+				db
+					.delete(psyProfiles)
+					.where(
+						and(eq(psyProfiles.id, id), eq(psyProfiles.userId, ctx.userId)),
+					)
+					.returning({ id: psyProfiles.id }),
+			]);
+
+			// Check if deletion was successful
+			const deletedProfile = batchResult[2] as { id: number }[];
+			if (deletedProfile.length === 0) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: "Failed to delete psychology profile",
+				});
+			}
+
+			return deletedProfile[0].id;
 		}),
 	deleteWritingProfile: t.procedure
 		.input(
@@ -798,164 +623,117 @@ export const contentRouter = t.router({
 		)
 		.mutation(async ({ input: { id }, ctx }) => {
 			const db = getDB(ctx.env);
-			try {
-				// Start transaction to handle cascade nullify safely
-				const deletedId = await db.transaction(async (tx) => {
-					// First, verify the profile exists and belongs to the user
-					const profile = await tx
-						.select()
-						.from(writingProfiles)
-						.where(
-							and(
-								eq(writingProfiles.id, id),
-								eq(writingProfiles.userId, ctx.userId)
-							)
-						)
-						.limit(1);
 
-					if (profile.length === 0) {
-						throw new Error("Profile not found or unauthorized");
-					}
+			// First, verify the profile exists and belongs to the user
+			const profile = await db
+				.select()
+				.from(writingProfiles)
+				.where(
+					and(
+						eq(writingProfiles.id, id),
+						eq(writingProfiles.userId, ctx.userId),
+					),
+				)
+				.limit(1);
 
-					// 1. Nullify references in generatedContents (only for this user)
-					await tx
-						.update(generatedContents)
-						.set({ writingProfileId: null })
-						.where(
-							and(
-								eq(generatedContents.writingProfileId, id),
-								eq(generatedContents.userId, ctx.userId)
-							)
-						);
-
-					// 2. Nullify references in ghostwriters (only for this user)
-					await tx
-						.update(ghostwriters)
-						.set({ writingProfileId: null })
-						.where(
-							and(
-								eq(ghostwriters.writingProfileId, id),
-								eq(ghostwriters.userId, ctx.userId)
-							)
-						);
-
-					// 3. Delete the profile itself (with user check)
-					const deleted = await tx
-						.delete(writingProfiles)
-						.where(
-							and(
-								eq(writingProfiles.id, id),
-								eq(writingProfiles.userId, ctx.userId)
-							)
-						)
-						.returning({ id: writingProfiles.id });
-
-					if (deleted.length === 0) {
-						throw new Error("Failed to delete profile");
-					}
-
-					return deleted[0].id;
+			if (profile.length === 0) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message:
+						"Writing profile not found or you don't have permission to delete it",
 				});
-
-				return {
-					success: true,
-					data: deletedId,
-				} as ApiResponseSuccessType<number>;
-			} catch (error) {
-				const errorMessage = (error as Error).message;
-				if (errorMessage === "Profile not found or unauthorized") {
-					return {
-						success: false,
-						error: {
-							code: "NOT_FOUND",
-							message: "Writing profile not found or you don't have permission to delete it",
-							details: errorMessage,
-						},
-					} as ApiResponseErrorType;
-				}
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to delete writing profile",
-						details: errorMessage,
-					},
-				} as ApiResponseErrorType;
 			}
+
+			// Use batch API for atomic operations (D1 best practice)
+			const batchResult = await db.batch([
+				// 1. Nullify references in generatedContents (only for this user)
+				db
+					.update(generatedContents)
+					.set({ writingProfileId: null })
+					.where(
+						and(
+							eq(generatedContents.writingProfileId, id),
+							eq(generatedContents.userId, ctx.userId),
+						),
+					),
+
+				// 2. Nullify references in ghostwriters (only for this user)
+				db
+					.update(ghostwriters)
+					.set({ writingProfileId: null })
+					.where(
+						and(
+							eq(ghostwriters.writingProfileId, id),
+							eq(ghostwriters.userId, ctx.userId),
+						),
+					),
+
+				// 3. Delete the profile itself (with user check)
+				db
+					.delete(writingProfiles)
+					.where(
+						and(
+							eq(writingProfiles.id, id),
+							eq(writingProfiles.userId, ctx.userId),
+						),
+					)
+					.returning({ id: writingProfiles.id }),
+			]);
+
+			// Check if deletion was successful
+			const deletedProfile = batchResult[2] as { id: number }[];
+			if (deletedProfile.length === 0) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: "Failed to delete writing profile",
+				});
+			}
+
+			return deletedProfile[0].id;
 		}),
 	createGhostwriter: t.procedure
 		.input(CreateGhostwriterInput)
 		.mutation(async ({ input: { name, description }, ctx }) => {
 			const db = getDB(ctx.env);
-			try {
-				const gw = await db
-					.insert(ghostwriters)
-					.values({
-						userId: ctx.userId,
-						name,
-						description: description || "",
-					})
-					.returning();
+			const gw = await db
+				.insert(ghostwriters)
+				.values({
+					userId: ctx.userId,
+					name,
+					description: description || "",
+				})
+				.returning();
 
-				return {
-					success: true,
-					data: gw[0],
-				} as ApiResponseSuccessType<Ghostwriter>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to create ghostwriter",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
-			}
+			return gw[0];
 		}),
 	addOriginalContents: t.procedure
 		.input(CreateOriginalContentInput)
 		.mutation(async ({ input: { content, gwId }, ctx }) => {
 			const db = getDB(ctx.env);
 			const contentArray = content.split("===").filter((item) => item.trim());
-			try {
-				await db
-					.insert(originalContents)
-					.values(
-						contentArray.map((contentItem) => ({
-							ghostwriterId: gwId || 0,
-							content: contentItem.trim(),
-						})),
-					)
-					.returning();
-				return {
-					success: true,
-					data: contentArray.length,
-				} as ApiResponseSuccessType<number>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to create original content",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
-			}
+			await db
+				.insert(originalContents)
+				.values(
+					contentArray.map((contentItem) => ({
+						ghostwriterId: gwId || 0,
+						content: contentItem.trim(),
+					})),
+				)
+				.returning();
+			
+			return contentArray.length;
 		}),
 	createPsyProfile: t.procedure
 		.input(CreateProfileInput)
 		.mutation(async ({ input: { name, content, gwId }, ctx }) => {
 			let contentArray: string[] = [];
 			const db = getDB(ctx.env);
+			
 			if (!content && !gwId) {
-				return {
-					success: false,
-					error: {
-						code: "BAD_REQUEST",
-						message: "No content or ghostwriter ID provided",
-						details: "Please provide either content or ghostwriter ID",
-					},
-				} as ApiResponseErrorType;
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "No content or ghostwriter ID provided. Please provide either content or ghostwriter ID",
+				});
 			}
 
 			if (content) {
@@ -973,96 +751,61 @@ export const contentRouter = t.router({
 				contentArray,
 			);
 
-			try {
-				const profile = await db
-					.insert(psyProfiles)
-					.values({
-						userId: ctx.userId,
-						ghostwriterId: gwId,
-						name,
-						content: analyzedProfile,
+			const profile = await db
+				.insert(psyProfiles)
+				.values({
+					userId: ctx.userId,
+					ghostwriterId: gwId,
+					name,
+					content: analyzedProfile,
+				})
+				.returning();
+
+			if (gwId) {
+				await db
+					.update(ghostwriters)
+					.set({
+						psyProfileId: profile[0].id,
 					})
-					.returning();
-
-				if (gwId) {
-					await db
-						.update(ghostwriters)
-						.set({
-							psyProfileId: profile[0].id,
-						})
-						.where(eq(ghostwriters.id, gwId));
-				}
-
-				return {
-					success: true,
-					data: profile[0],
-				} as ApiResponseSuccessType<PsyProfile>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to create psychology profile",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
+					.where(eq(ghostwriters.id, gwId));
 			}
+
+			return profile[0];
 		}),
 	updatePsyProfile: t.procedure
 		.input(UpdateProfileInput)
-		.mutation(async ({ input: { id, name, description, content }, ctx }) => {
-			if (!id) {
-				return {
-					success: false,
-					error: {
-						code: "BAD_REQUEST",
-						message: "Profile ID is required",
-						details: "Please provide a profile ID",
-					},
-				} as ApiResponseErrorType;
-			}
-
+		.mutation(async ({ input: { id, name, content }, ctx }) => {
 			const updateData: Partial<z.infer<typeof UpdateProfileInput>> = {};
 			if (name) updateData.name = name;
-			if (description) updateData.description = description;
 			if (content) updateData.content = content;
 
 			const db = getDB(ctx.env);
-			try {
-				const profile = await db
-					.update(psyProfiles)
-					.set(updateData)
-					.where(eq(psyProfiles.id, id))
-					.returning();
-				return {
-					success: true,
-					data: profile[0],
-				} as ApiResponseSuccessType<PsyProfile>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to update psychology profile",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
+			const profile = await db
+				.update(psyProfiles)
+				.set(updateData)
+				.where(and(eq(psyProfiles.id, id), eq(psyProfiles.userId, ctx.userId)))
+				.returning();
+			
+			if (profile.length === 0) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Psychology profile not found or you don't have permission to update it",
+				});
 			}
+			
+			return profile[0];
 		}),
 	createWritingProfile: t.procedure
 		.input(CreateProfileInput)
 		.mutation(async ({ input: { name, content, gwId }, ctx }) => {
 			let contentArray: string[] = [];
 			const db = getDB(ctx.env);
+			
 			if (!content && !gwId) {
-				return {
-					success: false,
-					error: {
-						code: "BAD_REQUEST",
-						message: "No content or ghostwriter ID provided",
-						details: "Please provide either content or ghostwriter ID",
-					},
-				} as ApiResponseErrorType;
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "No content or ghostwriter ID provided. Please provide either content or ghostwriter ID",
+				});
 			}
 
 			if (content) {
@@ -1080,81 +823,49 @@ export const contentRouter = t.router({
 				contentArray,
 			);
 
-			try {
-				const profile = await db
-					.insert(writingProfiles)
-					.values({
-						userId: ctx.userId,
-						ghostwriterId: gwId,
-						name,
-						content: analyzedProfile,
+			const profile = await db
+				.insert(writingProfiles)
+				.values({
+					userId: ctx.userId,
+					ghostwriterId: gwId,
+					name,
+					content: analyzedProfile,
+				})
+				.returning();
+
+			if (gwId) {
+				await db
+					.update(ghostwriters)
+					.set({
+						writingProfileId: profile[0].id,
 					})
-					.returning();
-
-				if (gwId) {
-					await db
-						.update(ghostwriters)
-						.set({
-							writingProfileId: profile[0].id,
-						})
-						.where(eq(ghostwriters.id, gwId));
-				}
-
-				return {
-					success: true,
-					data: profile[0],
-				} as ApiResponseSuccessType<PsyProfile>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to create writing profile",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
+					.where(eq(ghostwriters.id, gwId));
 			}
+
+			return profile[0];
 		}),
 	updateWritingProfile: t.procedure
 		.input(UpdateProfileInput)
-		.mutation(async ({ input: { id, name, description, content }, ctx }) => {
-			if (!id) {
-				return {
-					success: false,
-					error: {
-						code: "BAD_REQUEST",
-						message: "Profile ID is required",
-						details: "Please provide a profile ID",
-					},
-				} as ApiResponseErrorType;
-			}
-
+		.mutation(async ({ input: { id, name, content }, ctx }) => {
 			const updateData: Partial<z.infer<typeof UpdateProfileInput>> = {};
 			if (name) updateData.name = name;
-			if (description) updateData.description = description;
 			if (content) updateData.content = content;
 
 			const db = getDB(ctx.env);
-			try {
-				const profile = await db
-					.update(writingProfiles)
-					.set(updateData)
-					.where(eq(writingProfiles.id, id))
-					.returning();
-				return {
-					success: true,
-					data: profile[0],
-				} as ApiResponseSuccessType<PsyProfile>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to update writing profile",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
+			const profile = await db
+				.update(writingProfiles)
+				.set(updateData)
+				.where(and(eq(writingProfiles.id, id), eq(writingProfiles.userId, ctx.userId)))
+				.returning();
+			
+			if (profile.length === 0) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Writing profile not found or you don't have permission to update it",
+				});
 			}
+			
+			return profile[0];
 		}),
 	generateContent: t.procedure
 		.input(GenerateContentInput)
@@ -1199,25 +910,17 @@ export const contentRouter = t.router({
 				]);
 
 			if (!psychologyProfile || !writingProfile) {
-				return {
-					success: false,
-					error: {
-						code: "NOT_FOUND",
-						message: "Profile not found",
-						details: "Profile not found",
-					},
-				} as ApiResponseErrorType;
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Profile not found",
+				});
 			}
 
 			if (!topic && !insight) {
-				return {
-					success: false,
-					error: {
-						code: "BAD_REQUEST",
-						message: "No topic or insight provided",
-						details: "Please provide either a topic or an insight",
-					},
-				} as ApiResponseErrorType;
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "No topic or insight provided. Please provide either a topic or an insight",
+				});
 			}
 
 			let completeTopic = "";
@@ -1236,10 +939,7 @@ export const contentRouter = t.router({
 				topic: completeTopic.trim(),
 			});
 
-			return {
-				success: true,
-				data: response,
-			} as ApiResponseSuccessType<string>;
+			return response;
 		}),
 	modifyPsyProfile: t.procedure
 		.input(
@@ -1257,55 +957,37 @@ export const contentRouter = t.router({
 				throw new Error("MISSING_API_KEY");
 			}
 
-			try {
-				// Get the original profile
-				const originalProfile = await db.query.psyProfiles.findFirst({
-					where: eq(psyProfiles.id, profileId),
+			// Get the original profile with user verification
+			const originalProfile = await db.query.psyProfiles.findFirst({
+				where: and(eq(psyProfiles.id, profileId), eq(psyProfiles.userId, ctx.userId)),
+			});
+
+			if (!originalProfile) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Psychology profile not found or you don't have permission to access it",
 				});
-
-				if (!originalProfile) {
-					return {
-						success: false,
-						error: {
-							code: "NOT_FOUND",
-							message: "Profile not found",
-							details: "The specified psychology profile does not exist",
-						},
-					} as ApiResponseErrorType;
-				}
-
-				// Generate the modified profile
-				const modifiedContent = await psyProfileModifier(
-					apiKey,
-					originalProfile.content,
-					modifications,
-				);
-
-				// Create the new profile
-				const newProfile = await db
-					.insert(psyProfiles)
-					.values({
-						userId: ctx.userId,
-						ghostwriterId: null, // New profiles are independent
-						name: newName,
-						content: modifiedContent,
-					})
-					.returning();
-
-				return {
-					success: true,
-					data: newProfile[0],
-				} as ApiResponseSuccessType<PsyProfile>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to modify psychology profile",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
 			}
+
+			// Generate the modified profile
+			const modifiedContent = await psyProfileModifier(
+				apiKey,
+				originalProfile.content,
+				modifications,
+			);
+
+			// Create the new profile
+			const newProfile = await db
+				.insert(psyProfiles)
+				.values({
+					userId: ctx.userId,
+					ghostwriterId: null, // New profiles are independent
+					name: newName,
+					content: modifiedContent,
+				})
+				.returning();
+
+			return newProfile[0];
 		}),
 	modifyWritingProfile: t.procedure
 		.input(
@@ -1323,54 +1005,36 @@ export const contentRouter = t.router({
 				throw new Error("MISSING_API_KEY");
 			}
 
-			try {
-				// Get the original profile
-				const originalProfile = await db.query.writingProfiles.findFirst({
-					where: eq(writingProfiles.id, profileId),
+			// Get the original profile with user verification
+			const originalProfile = await db.query.writingProfiles.findFirst({
+				where: and(eq(writingProfiles.id, profileId), eq(writingProfiles.userId, ctx.userId)),
+			});
+
+			if (!originalProfile) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Writing profile not found or you don't have permission to access it",
 				});
-
-				if (!originalProfile) {
-					return {
-						success: false,
-						error: {
-							code: "NOT_FOUND",
-							message: "Profile not found",
-							details: "The specified writing profile does not exist",
-						},
-					} as ApiResponseErrorType;
-				}
-
-				// Generate the modified profile
-				const modifiedContent = await writeProfileModifier(
-					apiKey,
-					originalProfile.content,
-					modifications,
-				);
-
-				// Create the new profile
-				const newProfile = await db
-					.insert(writingProfiles)
-					.values({
-						userId: ctx.userId,
-						ghostwriterId: null, // New profiles are independent
-						name: newName,
-						content: modifiedContent,
-					})
-					.returning();
-
-				return {
-					success: true,
-					data: newProfile[0],
-				} as ApiResponseSuccessType<WritingProfile>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to modify writing profile",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
 			}
+
+			// Generate the modified profile
+			const modifiedContent = await writeProfileModifier(
+				apiKey,
+				originalProfile.content,
+				modifications,
+			);
+
+			// Create the new profile
+			const newProfile = await db
+				.insert(writingProfiles)
+				.values({
+					userId: ctx.userId,
+					ghostwriterId: null, // New profiles are independent
+					name: newName,
+					content: modifiedContent,
+				})
+				.returning();
+
+			return newProfile[0];
 		}),
 });

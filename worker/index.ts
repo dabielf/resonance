@@ -15,7 +15,7 @@ export default {
 					status: 401,
 				});
 			}
-			console.log("USER ID", userId);
+
 			return fetchRequestHandler({
 				endpoint: "/trpc",
 				req: request,

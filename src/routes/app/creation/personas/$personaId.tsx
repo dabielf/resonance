@@ -41,7 +41,7 @@ function RouteComponent() {
 		trpc.contentRouter.getPersona.queryOptions({ id }),
 	);
 
-	const persona = data?.success ? data.data : null;
+	const persona = data;
 
 	// Form state
 	const [name, setName] = useState("");

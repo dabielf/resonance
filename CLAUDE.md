@@ -267,132 +267,488 @@ Use tabs for content that can be edited and previewed:
 
 ## TRPC API Development Patterns
 
-### Standard CRUD Operations
-Every entity should follow this pattern:
+All TRPC procedures in this project use **idiomatic TRPC patterns** with direct data returns and proper error handling.
 
+### **Core TRPC Patterns**
+
+#### List Queries (User-Scoped)
 ```typescript
-// List items (always user-scoped)
+// Basic list query
 listItems: t.procedure.query(async ({ ctx }) => {
   const db = getDB(ctx.env);
-  try {
-    const data = await db.query.items.findMany({
-      where: eq(items.userId, ctx.userId), // Always filter by user
-      orderBy: [desc(items.createdAt)],
-    });
-    return { success: true, data } as ApiResponseSuccessType<Item[]>;
-  } catch (error) {
-    return {
-      success: false,
-      error: {
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to get items",
-        details: (error as Error).message,
-      },
-    } as ApiResponseErrorType;
-  }
+  const data = await db.query.items.findMany({
+    where: eq(items.userId, ctx.userId), // Always filter by user
+    orderBy: [desc(items.createdAt)],
+  });
+  return data; // Return data directly
 }),
 
-// Get single item
-getItem: t.procedure
-  .input(z.object({ id: z.number().min(1, "Item ID is required") }))
+// List with complex filtering (soft-deleted items)
+listGhostwriters: t.procedure.query(async ({ ctx }) => {
+  const db = getDB(ctx.env);
+  const writers = await db.query.ghostwriters.findMany({
+    where: and(
+      eq(ghostwriters.userId, ctx.userId),
+      isNull(ghostwriters.deletedAt), // Filter out soft-deleted
+    ),
+  });
+  return writers;
+}),
+
+// List with relations
+listGeneratedContents: t.procedure.query(async ({ ctx }) => {
+  const db = getDB(ctx.env);
+  const data = await db.query.generatedContents.findMany({
+    where: eq(generatedContents.userId, ctx.userId),
+    orderBy: [desc(generatedContents.createdAt)],
+    with: {
+      writingProfile: { columns: { id: true, name: true } },
+      psyProfile: { columns: { id: true, name: true } },
+      persona: { columns: { id: true, name: true } },
+      ghostwriter: { columns: { id: true, name: true } },
+    },
+  });
+  return data;
+}),
+```
+
+#### Single Item Queries with Validation
+```typescript
+// Basic get with NOT_FOUND validation
+getPersona: t.procedure
+  .input(z.object({ id: z.number().min(1, "Persona ID is required") }))
   .query(async ({ input: { id }, ctx }) => {
     const db = getDB(ctx.env);
-    try {
-      const data = await db.query.items.findFirst({
-        where: eq(items.id, id),
+    const data = await db.query.personas.findFirst({
+      where: and(eq(personas.id, id), eq(personas.userId, ctx.userId)),
+    });
+    
+    if (!data) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Persona not found or you don't have permission to access it",
       });
-      return { success: true, data } as ApiResponseSuccessType<Item>;
-    } catch (error) {
-      return {
-        success: false,
-        error: {
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to get item",
-          details: (error as Error).message,
-        },
-      } as ApiResponseErrorType;
     }
+    
+    return data;
   }),
 
-// Create item
-saveItem: t.procedure
-  .input(CreateItemInput)
-  .mutation(async ({ input: { name, description, content }, ctx }) => {
+// Get with relations
+getGhostwriter: t.procedure
+  .input(z.object({ id: z.number().min(1, "Ghostwriter ID is required") }))
+  .query(async ({ input: { id }, ctx }) => {
     const db = getDB(ctx.env);
-    try {
-      const item = await db
-        .insert(items)
-        .values({
-          userId: ctx.userId,
-          name,
-          description: description || "",
-          content,
-        })
-        .returning();
-
-      return { success: true, data: item[0] } as ApiResponseSuccessType<Item>;
-    } catch (error) {
-      return {
-        success: false,
-        error: {
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to create item",
-          details: (error as Error).message,
+    const data = await db.query.ghostwriters.findFirst({
+      where: and(eq(ghostwriters.id, id), eq(ghostwriters.userId, ctx.userId)),
+      with: {
+        currentPsyProfile: {
+          columns: { id: true, name: true, content: true },
         },
-      } as ApiResponseErrorType;
-    }
-  }),
-
-// Update item
-updateItem: t.procedure
-  .input(UpdateItemInput)
-  .mutation(async ({ input: { id, name, description, content }, ctx }) => {
-    const db = getDB(ctx.env);
-    try {
-      const item = await db
-        .update(items)
-        .set({ name, description: description || "", content })
-        .where(eq(items.id, id))
-        .returning();
-      return { success: true, data: item[0] } as ApiResponseSuccessType<Item>;
-    } catch (error) {
-      return {
-        success: false,
-        error: {
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to update item",
-          details: (error as Error).message,
+        currentWritingProfile: {
+          columns: { id: true, name: true, content: true },
         },
-      } as ApiResponseErrorType;
+      },
+    });
+    
+    if (!data) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Ghostwriter not found or you don't have permission to access it",
+      });
     }
-  }),
-
-// Delete item
-deleteItem: t.procedure
-  .input(z.object({ id: z.number().min(1, "Item ID is required") }))
-  .mutation(async ({ input: { id }, ctx }) => {
-    const db = getDB(ctx.env);
-    try {
-      await db.delete(items).where(eq(items.id, id));
-      return { success: true, data: id } as ApiResponseSuccessType<number>;
-    } catch (error) {
-      return {
-        success: false,
-        error: {
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to delete item",
-          details: (error as Error).message,
-        },
-      } as ApiResponseErrorType;
-    }
+    
+    return data;
   }),
 ```
 
-### Error Handling Standards
-- Always use try-catch blocks
-- Return consistent error response types
-- Include specific error codes and messages
-- Log errors for debugging but don't expose sensitive details
+#### Create Operations (Insert)
+```typescript
+// Basic create
+savePersona: t.procedure
+  .input(CreatePersonaInput)
+  .mutation(async ({ input: { name, description, content }, ctx }) => {
+    const db = getDB(ctx.env);
+    const persona = await db
+      .insert(personas)
+      .values({
+        userId: ctx.userId,
+        name,
+        description: description || "",
+        content,
+      })
+      .returning();
+
+    return persona[0];
+  }),
+
+// Create with AI processing
+createPsyProfile: t.procedure
+  .input(CreateProfileInput)
+  .mutation(async ({ input: { name, content, gwId }, ctx }) => {
+    let contentArray: string[] = [];
+    const db = getDB(ctx.env);
+    
+    if (!content && !gwId) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "No content or ghostwriter ID provided. Please provide either content or ghostwriter ID",
+      });
+    }
+
+    // Process content from different sources
+    if (content) {
+      contentArray = content.split("===").filter((item) => item.trim());
+    } else if (gwId) {
+      const dbContent = await db
+        .select()
+        .from(originalContents)
+        .where(eq(originalContents.ghostwriterId, gwId));
+      contentArray = dbContent.map((item) => item.content);
+    }
+
+    // AI processing
+    const analyzedProfile = await analyzePsychology(
+      ctx.env.GOOGLE_GENERATIVE_AI_API_KEY,
+      contentArray,
+    );
+
+    const profile = await db
+      .insert(psyProfiles)
+      .values({
+        userId: ctx.userId,
+        ghostwriterId: gwId,
+        name,
+        content: analyzedProfile,
+      })
+      .returning();
+
+    // Update related entities if needed
+    if (gwId) {
+      await db
+        .update(ghostwriters)
+        .set({ psyProfileId: profile[0].id })
+        .where(eq(ghostwriters.id, gwId));
+    }
+
+    return profile[0];
+  }),
+```
+
+#### Update Operations with Validation
+```typescript
+// Basic update with validation
+updatePersona: t.procedure
+  .input(UpdatePersonaInput)
+  .mutation(async ({ input: { id, name, description, content }, ctx }) => {
+    const db = getDB(ctx.env);
+    const persona = await db
+      .update(personas)
+      .set({
+        name,
+        description: description || "",
+        content,
+      })
+      .where(and(eq(personas.id, id), eq(personas.userId, ctx.userId)))
+      .returning();
+    
+    if (persona.length === 0) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Persona not found or you don't have permission to update it",
+      });
+    }
+    
+    return persona[0];
+  }),
+
+// Partial update with dynamic fields
+updateGhostwriter: t.procedure
+  .input(z.object({
+    id: z.number().min(1, "Ghostwriter ID is required"),
+    name: z.string().min(1, "Name is required").optional(),
+    description: z.string().optional(),
+    psyProfileId: z.number().optional(),
+    writingProfileId: z.number().optional(),
+  }))
+  .mutation(async ({ input: { id, name, description, psyProfileId, writingProfileId }, ctx }) => {
+    const db = getDB(ctx.env);
+    const updateData: Partial<typeof ghostwriters.$inferInsert> = {};
+    if (name !== undefined) updateData.name = name;
+    if (description !== undefined) updateData.description = description;
+    if (psyProfileId !== undefined) updateData.psyProfileId = psyProfileId;
+    if (writingProfileId !== undefined) updateData.writingProfileId = writingProfileId;
+
+    const ghostwriter = await db
+      .update(ghostwriters)
+      .set(updateData)
+      .where(and(eq(ghostwriters.id, id), eq(ghostwriters.userId, ctx.userId)))
+      .returning();
+
+    if (ghostwriter.length === 0) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Ghostwriter not found or you don't have permission to update it",
+      });
+    }
+
+    return ghostwriter[0];
+  }),
+```
+
+#### Delete Operations
+```typescript
+// Simple delete with verification
+deletePersona: t.procedure
+  .input(z.object({ id: z.number().min(1, "Persona ID is required") }))
+  .mutation(async ({ input: { id }, ctx }) => {
+    const db = getDB(ctx.env);
+    
+    // Verify ownership before deletion
+    const persona = await db.select().from(personas)
+      .where(and(eq(personas.id, id), eq(personas.userId, ctx.userId)))
+      .limit(1);
+
+    if (persona.length === 0) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Persona not found or you don't have permission to delete it",
+      });
+    }
+
+    await db.delete(personas).where(eq(personas.id, id));
+    return id;
+  }),
+
+// Soft delete (preserve data with timestamp)
+deleteGhostwriter: t.procedure
+  .input(z.object({ id: z.number().min(1, "Ghostwriter ID is required") }))
+  .mutation(async ({ input: { id }, ctx }) => {
+    const db = getDB(ctx.env);
+    
+    // Verify ownership before deletion
+    const ghostwriter = await db.select().from(ghostwriters)
+      .where(and(eq(ghostwriters.id, id), eq(ghostwriters.userId, ctx.userId)))
+      .limit(1);
+
+    if (ghostwriter.length === 0) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Ghostwriter not found or you don't have permission to delete it",
+      });
+    }
+
+    // Soft delete: set deletedAt timestamp
+    const updatedGhostwriter = await db
+      .update(ghostwriters)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(eq(ghostwriters.id, id))
+      .returning();
+
+    return updatedGhostwriter[0];
+  }),
+
+// Complex delete with D1 batch operations
+deletePsyProfile: t.procedure
+  .input(z.object({ id: z.number().min(1, "Psychology profile ID is required") }))
+  .mutation(async ({ input: { id }, ctx }) => {
+    const db = getDB(ctx.env);
+
+    // First, verify the profile exists and belongs to the user
+    const profile = await db
+      .select()
+      .from(psyProfiles)
+      .where(and(eq(psyProfiles.id, id), eq(psyProfiles.userId, ctx.userId)))
+      .limit(1);
+
+    if (profile.length === 0) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Psychology profile not found or you don't have permission to delete it",
+      });
+    }
+
+    // Use batch API for atomic operations (D1 best practice)
+    const batchResult = await db.batch([
+      // 1. Nullify references in generatedContents (only for this user)
+      db
+        .update(generatedContents)
+        .set({ psyProfileId: null })
+        .where(
+          and(
+            eq(generatedContents.psyProfileId, id),
+            eq(generatedContents.userId, ctx.userId),
+          ),
+        ),
+
+      // 2. Nullify references in ghostwriters (only for this user)
+      db
+        .update(ghostwriters)
+        .set({ psyProfileId: null })
+        .where(
+          and(
+            eq(ghostwriters.psyProfileId, id),
+            eq(ghostwriters.userId, ctx.userId),
+          ),
+        ),
+
+      // 3. Delete the profile itself (with user check)
+      db
+        .delete(psyProfiles)
+        .where(
+          and(eq(psyProfiles.id, id), eq(psyProfiles.userId, ctx.userId)),
+        )
+        .returning({ id: psyProfiles.id }),
+    ]);
+
+    // Check if deletion was successful
+    const deletedProfile = batchResult[2] as { id: number }[];
+    if (deletedProfile.length === 0) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to delete psychology profile",
+      });
+    }
+
+    return deletedProfile[0].id;
+  }),
+```
+
+#### Complex Operations (AI Generation & External APIs)
+```typescript
+// Content generation with external API
+generateContent: t.procedure
+  .input(GenerateContentInput)
+  .mutation(async ({ input, ctx }) => {
+    const db = getDB(ctx.env);
+    const apiKey = await ctx.crypto.getApiKey("gemini");
+
+    if (!apiKey) {
+      throw new Error("MISSING_API_KEY");
+    }
+
+    const { topic, psychologyProfileId, writingProfileId, personaProfileId, insightId } = input;
+    
+    // Fetch multiple resources in parallel
+    const [psychologyProfile, writingProfile, personaProfile, insight] =
+      await Promise.all([
+        db.query.psyProfiles.findFirst({ where: eq(psyProfiles.id, psychologyProfileId) }),
+        db.query.writingProfiles.findFirst({ where: eq(writingProfiles.id, writingProfileId) }),
+        personaProfileId
+          ? db.query.personas.findFirst({ where: eq(personas.id, personaProfileId) })
+          : Promise.resolve(null),
+        insightId
+          ? db.query.insights.findFirst({ where: eq(insights.id, insightId) })
+          : Promise.resolve(null),
+      ]);
+
+    if (!psychologyProfile || !writingProfile) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Profile not found",
+      });
+    }
+
+    if (!topic && !insight) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "No topic or insight provided. Please provide either a topic or an insight",
+      });
+    }
+
+    // Process and combine inputs
+    let completeTopic = "";
+    if (insight) completeTopic = insight.rawContent;
+    if (topic) completeTopic += `\n\n${topic}`;
+
+    // Call external AI service
+    const response = await generateContent({
+      apiKey,
+      psychologyProfile: psychologyProfile.content,
+      writingProfile: writingProfile.content,
+      personaProfile: personaProfile?.content,
+      topic: completeTopic.trim(),
+    });
+
+    return response;
+  }),
+
+// AI-powered profile modification
+modifyPsyProfile: t.procedure
+  .input(z.object({
+    profileId: z.number().min(1, "Profile ID is required"),
+    newName: z.string().min(1, "New name is required"),
+    modifications: z.string().min(1, "Modifications are required"),
+  }))
+  .mutation(async ({ input: { profileId, newName, modifications }, ctx }) => {
+    const db = getDB(ctx.env);
+    const apiKey = await ctx.crypto.getApiKey("gemini");
+
+    if (!apiKey) {
+      throw new Error("MISSING_API_KEY");
+    }
+
+    // Get the original profile with user verification
+    const originalProfile = await db.query.psyProfiles.findFirst({
+      where: and(eq(psyProfiles.id, profileId), eq(psyProfiles.userId, ctx.userId)),
+    });
+
+    if (!originalProfile) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Psychology profile not found or you don't have permission to access it",
+      });
+    }
+
+    // Generate the modified profile using AI
+    const modifiedContent = await psyProfileModifier(
+      apiKey,
+      originalProfile.content,
+      modifications,
+    );
+
+    // Create the new profile
+    const newProfile = await db
+      .insert(psyProfiles)
+      .values({
+        userId: ctx.userId,
+        ghostwriterId: null, // New profiles are independent
+        name: newName,
+        content: modifiedContent,
+      })
+      .returning();
+
+    return newProfile[0];
+  }),
+```
+
+### **D1 Database Best Practices**
+
+#### Use Batch Operations Instead of Transactions
+```typescript
+// ✅ CORRECT: D1 Batch API (atomic operations)
+const batchResult = await db.batch([
+  db.update(profiles).set({ isActive: false }).where(eq(profiles.userId, userId)),
+  db.delete(items).where(eq(items.profileId, profileId)).returning(),
+  db.insert(auditLog).values({ action: 'delete', userId, itemId: profileId }),
+]);
+
+// ❌ INCORRECT: Transactions (not supported in D1)
+await db.transaction(async (tx) => {
+  // This will fail in Cloudflare D1
+});
+```
+
+### **Error Handling Standards**
+- Use `TRPCError` with appropriate error codes (`NOT_FOUND`, `BAD_REQUEST`, `INTERNAL_SERVER_ERROR`)
+- Automatic error logging with comprehensive context (errorId, requestId, userId)
+- Security-aware: no sensitive data in production logs
+- User ownership validation for all operations
+
+### **Input Validation**
+- All procedures use Zod schemas for input validation
+- Common patterns: `z.number().min(1, "ID is required")` for IDs
+- Optional fields: `.optional()` suffix
+- String validation: `z.string().min(1, "Field is required")`
 
 ### Security Patterns
 - **ALWAYS** filter database queries by `ctx.userId`
@@ -724,6 +1080,7 @@ Required environment variables:
 - `GOOGLE_GENERATIVE_AI_API_KEY` - AI generation (stored encrypted)
 - Cloudflare account and database IDs configured in `wrangler.jsonc`
 
+
 ## Important Notes
 
 - The project uses PNPM as the package manager
@@ -735,3 +1092,23 @@ Required environment variables:
 - **Security**: Always filter database queries by userId
 - **UX**: Always provide loading states and user feedback via toasts
 - **Code Organization**: Follow established import patterns and component structure
+- **Error Logging**: Comprehensive automatic logging with errorId, requestId, and user context
+
+## Development Philosophy
+- **Prefer simplicity over complexity** - choose the most straightforward solution that works
+- **Avoid premature optimization** - don't add abstractions, patterns, or features until they're actually needed
+- **Start with the minimal viable implementation** - we can always refactor later if complexity is justified
+- **Question every layer of abstraction** - each one should solve a real, current problem
+
+## Code Style Preferences
+- Favor plain functions over classes when possible
+- Use direct implementations over design patterns unless the pattern solves a specific problem
+- Avoid creating interfaces/abstractions for single implementations
+- Don't create configuration systems until you have multiple varying use cases
+- Prefer inline logic over extracted functions until the extraction serves a clear purpose
+
+## When Making Decisions
+- Ask "What's the simplest thing that could work?" first
+- If suggesting architecture, explain why the complexity is necessary
+- Default to standard library solutions over external dependencies
+- Prefer explicit code over "clever" code

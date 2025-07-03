@@ -15,11 +15,15 @@ export async function createContext({
 	const db = getDB(env);
 	const crypto = new UserSettingsCrypto();
 	
+	// Generate unique request ID for correlation
+	const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+	
 	return {
 		req,
 		env,
 		workerCtx,
 		userId,
+		requestId,
 		db,
 		crypto: {
 			service: crypto,

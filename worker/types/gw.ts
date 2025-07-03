@@ -1,60 +1,5 @@
 import { z } from "zod";
 
-// =====================================================
-// API RESPONSE SCHEMAS
-// =====================================================
-
-// Base response type that matches API
-export const ApiResponse = <T>(dataSchema: z.ZodType<T>) =>
-	z.union([
-		z.object({
-			success: z.literal(true),
-			data: dataSchema,
-			message: z.string().optional(),
-			meta: z
-				.object({
-					page: z.number().optional(),
-					limit: z.number().optional(),
-					total: z.number().optional(),
-					hasMore: z.boolean().optional(),
-				})
-				.optional(),
-		}),
-		z.object({
-			success: z.literal(false),
-			error: z.object({
-				code: z.string(),
-				message: z.string(),
-				details: z.string().optional(),
-			}),
-		}),
-	]);
-
-// Type helpers for API responses
-export type ApiResponseSuccessType<T> = {
-	success: true;
-	data: T;
-	message?: string;
-	meta?: {
-		page?: number;
-		limit?: number;
-		total?: number;
-		hasMore?: boolean;
-	};
-};
-
-export type ApiResponseErrorType = {
-	success: false;
-	error: {
-		code: string;
-		message: string;
-		details?: string;
-	};
-};
-
-export type ApiResponseType<T> =
-	| ApiResponseSuccessType<T>
-	| ApiResponseErrorType;
 
 // =====================================================
 // CORE ENTITY SCHEMAS
@@ -165,10 +110,14 @@ export const CreateProfileInput = z.object({
 	gwId: z.number().optional(),
 });
 
+export const SaveProfileInput = z.object({
+	name: z.string().min(1, "Name is required"),
+	content: z.string().min(1, "Content is required"),
+});
+
 export const UpdateProfileInput = z.object({
 	id: z.number().min(1, "Profile ID is required"),
-	name: z.string().min(1, "Name is required"),
-	description: z.string().optional(),
+	name: z.string().optional(),
 	content: z.string().optional(),
 });
 
@@ -196,11 +145,6 @@ export const SaveContentInput = z.object({
 	isTrainingData: z.boolean().optional(),
 });
 
-export const SaveProfileInput = z.object({
-	name: z.string().min(1, "Name is required"),
-	content: z.string().min(1, "Content is required"),
-});
-
 export const CreatePersonaInput = z.object({
 	name: z.string().min(1, "Name is required"),
 	description: z.string().optional(),
@@ -215,8 +159,8 @@ export const UpdatePersonaInput = z.object({
 });
 
 export const ValueExtractorInput = z.object({
-	personaId: z.string().min(1, "Persona ID is required"),
-	resourceId: z.string().min(1, "Resource ID is required"),
+	personaId: z.number().min(1, "Persona ID is required"),
+	resourceId: z.number().min(1, "Resource ID is required"),
 	topic: z.string().optional(),
 });
 
@@ -226,108 +170,14 @@ export const UpdateGeneratedContentInput = z.object({
 	isTrainingData: z.boolean().optional(),
 });
 
-export const PaginationInput = z.object({
-	page: z.number().min(1).default(1),
-	limit: z.number().min(1).max(100).default(20),
-});
 
-// =====================================================
-// INPUT SCHEMAS - API/BACKEND
-// =====================================================
 
-export const ProfilerSchema = z.object({
-	content: z.string().min(1),
-	gwId: z.string().optional(),
-	isSingleString: z.string().optional(),
-});
 
-export const originalContentAddSchema = z.object({
-	content: z.string().min(1),
-});
 
-export const ProfileCreateSchema = z.object({
-	content: z.string().min(1).optional(),
-	name: z.string().min(1),
-	gwId: z.number().optional(),
-});
-
-export const WriteSchema = z.object({
-	psychologyProfileId: z.number().min(1),
-	writingProfileId: z.number().min(1),
-	personaProfileId: z.number().min(1).optional(),
-	gwId: z.number().optional(),
-	insightId: z.number().min(1).optional(),
-	topic: z.string().min(1).optional(),
-	userFeedback: z.string().optional(),
-});
-
-export const PersonaCreateSchema = z.object({
-	content: z.string().min(1),
-	description: z.string().optional(),
-	name: z.string().min(1),
-});
-
-export const GhostWriterIdSchema = z.object({
-	gwId: z.number().optional(),
-});
-
-export const SaveContentSchema = z.object({
-	content: z.string().min(1),
-	gwId: z.number().optional(),
-	psyProfileId: z.number().min(1),
-	writingProfileId: z.number().min(1),
-	personaProfileId: z.number().min(1).optional(),
-	prompt: z.string().min(1),
-	userFeedback: z.string().optional(),
-	isTrainingData: z.string().optional(),
-});
-
-export const ValueExtractorSchema = z.object({
-	personaId: z.string().min(1),
-	resourceId: z.string().min(1),
-});
-
-export const CreateGhostwriterSchema = z.object({
-	name: z.string().min(1),
-	content: z.string().min(1),
-	description: z.string().optional(),
-});
-
-export const UpdateGhostwriterSchema = z.object({
-	name: z.string().min(1).optional(),
-});
-
-export const UpdatePsyProfileSchema = z.object({
-	content: z.string().min(1).optional(),
-	name: z.string().min(1).optional(),
-});
-
-export const UpdateWritingProfileSchema = z.object({
-	content: z.string().min(1).optional(),
-	name: z.string().min(1).optional(),
-});
-
-export const UpdatePersonaSchema = z.object({
-	name: z.string().min(1).optional(),
-	description: z.string().optional(),
-	content: z.string().min(1).optional(),
-});
-
-export const UpdateGeneratedContentSchema = z.object({
-	userFeedBack: z.string().optional(),
-	isTrainingData: z.boolean().optional(),
-});
 
 // Profile customization schemas
 export const CustomizeProfileInput = z.object({
-	modifications: z
-		.string()
-		.min(1, "Modifications are required")
-		.describe("Instructions for how to modify the profile"),
-});
-
-export const CustomizeProfileSchema = z.object({
-	modifications: z.string().min(1),
+	modifications: z.string().min(1, "Modifications are required"),
 });
 
 // File conversion schemas
@@ -430,28 +280,15 @@ export const GeneratedContentWithRelationsSchema =
 		ghostwriter: z.object({ id: z.number(), name: z.string() }).optional(),
 	});
 
-// Paginated response schema
-export const PaginatedResponseSchema = <T extends z.ZodType>(dataSchema: T) =>
-	z.object({
-		data: z.array(dataSchema),
-		meta: z
-			.object({
-				page: z.number(),
-				limit: z.number(),
-				total: z.number(),
-				hasMore: z.boolean(),
-			})
-			.optional(),
-	});
 
 // Generate content response schema
 export const GenerateContentResponseSchema = z.object({
 	content: z.string(),
-	writingProfileId: z.string(),
-	psychologyProfileId: z.string(),
+	writingProfileId: z.number(),
+	psychologyProfileId: z.number(),
 	topic: z.string().optional(),
-	gwId: z.string().optional(),
-	personaProfileId: z.string().optional(),
+	gwId: z.number().optional(),
+	personaProfileId: z.number().optional(),
 });
 
 // Create ghostwriter response schema
@@ -487,15 +324,6 @@ export type WritingProfileWithRelations = z.infer<typeof WritingProfileWithRelat
 export type GeneratedContentWithRelations = z.infer<
 	typeof GeneratedContentWithRelationsSchema
 >;
-export type PaginatedResponse<T> = {
-	data: T[];
-	meta?: {
-		page: number;
-		limit: number;
-		total: number;
-		hasMore: boolean;
-	};
-};
 
 // Input types
 export type CreateGhostwriterData = z.infer<typeof CreateGhostwriterInput>;
@@ -504,7 +332,7 @@ export type CreateOriginalContentData = z.infer<
 >;
 export type GenerateContentData = z.infer<typeof GenerateContentInput>;
 export type SaveContentData = z.infer<typeof SaveContentInput>;
-export type SaveProfileData = z.infer<typeof SaveProfileInput>;
+export type SaveProfileData = z.infer<typeof CreateProfileInput>;
 export type CreatePersonaData = z.infer<typeof CreatePersonaInput>;
 export type UpdateGeneratedContentData = z.infer<
 	typeof UpdateGeneratedContentInput

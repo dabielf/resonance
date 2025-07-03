@@ -138,9 +138,9 @@ function RouteComponent() {
 		trpc.contentRouter.listGhostwriters.queryOptions(),
 	);
 
-	const psyProfiles = psyData?.success ? psyData.data : [];
-	const writingProfiles = writingData?.success ? writingData.data : [];
-	const writers = writersData?.success ? writersData.data : [];
+	const psyProfiles = psyData || [];
+	const writingProfiles = writingData || [];
+	const writers = writersData || [];
 
 	// Delete mutations
 	const deletePsyProfileMutation = useMutation(

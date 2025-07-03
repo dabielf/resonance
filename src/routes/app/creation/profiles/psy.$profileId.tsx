@@ -61,7 +61,7 @@ function RouteComponent() {
 		}),
 	);
 
-	const profile = data?.success ? data.data : null;
+	const profile = data;
 
 	// Update mutations
 	const updateProfileMutation = useMutation(
@@ -101,19 +101,17 @@ function RouteComponent() {
 	const generateProfileMutation = useMutation(
 		trpc.contentRouter.modifyPsyProfile.mutationOptions({
 			onSuccess: (data) => {
-				if (data.success) {
-					toast.success("New profile generated successfully");
-					queryClient.invalidateQueries({
-						queryKey: trpc.contentRouter.listPsyProfiles.queryKey(),
-					});
-					// Close the dialog
-					setGenerateDialogOpen(false);
-					// Navigate to the new profile
-					navigate({
-						to: "/app/creation/profiles/psy/$profileId",
-						params: { profileId: data.data.id.toString() },
-					});
-				}
+				toast.success("New profile generated successfully");
+				queryClient.invalidateQueries({
+					queryKey: trpc.contentRouter.listPsyProfiles.queryKey(),
+				});
+				// Close the dialog
+				setGenerateDialogOpen(false);
+				// Navigate to the new profile
+				navigate({
+					to: "/app/creation/profiles/psy/$profileId",
+					params: { profileId: data.id.toString() },
+				});
 			},
 			onError: (error) => {
 				if (error.message === "MISSING_API_KEY") {
