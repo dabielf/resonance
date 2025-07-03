@@ -196,6 +196,11 @@ export const SaveContentInput = z.object({
 	isTrainingData: z.boolean().optional(),
 });
 
+export const SaveProfileInput = z.object({
+	name: z.string().min(1, "Name is required"),
+	content: z.string().min(1, "Content is required"),
+});
+
 export const CreatePersonaInput = z.object({
 	name: z.string().min(1, "Name is required"),
 	description: z.string().optional(),
@@ -406,6 +411,16 @@ export const InsightWithRelationsSchema = InsightSchema.extend({
 	resourceContent: z.object({ id: z.number(), title: z.string() }).optional(),
 });
 
+// Psychology profile with relations
+export const PsyProfileWithRelationsSchema = PsyProfileSchema.extend({
+	ghostwriter: z.object({ id: z.number(), name: z.string() }).optional(),
+});
+
+// Writing profile with relations
+export const WritingProfileWithRelationsSchema = WritingProfileSchema.extend({
+	ghostwriter: z.object({ id: z.number(), name: z.string() }).optional(),
+});
+
 // Generated content with relations for list views
 export const GeneratedContentWithRelationsSchema =
 	GeneratedContentSchema.extend({
@@ -467,6 +482,8 @@ export type PersonaList = z.infer<typeof PersonaListSchema>;
 export type ResourceContentList = z.infer<typeof ResourceContentListSchema>;
 export type ListAllResponse = z.infer<typeof ListAllResponseSchema>;
 export type InsightWithRelations = z.infer<typeof InsightWithRelationsSchema>;
+export type PsyProfileWithRelations = z.infer<typeof PsyProfileWithRelationsSchema>;
+export type WritingProfileWithRelations = z.infer<typeof WritingProfileWithRelationsSchema>;
 export type GeneratedContentWithRelations = z.infer<
 	typeof GeneratedContentWithRelationsSchema
 >;
@@ -487,6 +504,7 @@ export type CreateOriginalContentData = z.infer<
 >;
 export type GenerateContentData = z.infer<typeof GenerateContentInput>;
 export type SaveContentData = z.infer<typeof SaveContentInput>;
+export type SaveProfileData = z.infer<typeof SaveProfileInput>;
 export type CreatePersonaData = z.infer<typeof CreatePersonaInput>;
 export type UpdateGeneratedContentData = z.infer<
 	typeof UpdateGeneratedContentInput

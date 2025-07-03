@@ -1,8 +1,5 @@
-import { desc, eq, and, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { generateContent } from "../../agents/ghostwriter";
-import { analyzePsychology } from "../../agents/psychological-profiler";
-import { analyzeWritingStyle } from "../../agents/writing-style-profiler";
 import { getDB } from "../../db";
 import { users } from "../../db/schema";
 import {
@@ -28,13 +25,30 @@ import {
 	type ListAllResponse,
 	type Persona,
 	type PsyProfile,
+	type PsyProfileWithRelations,
 	SaveContentInput,
+	SaveProfileInput,
 	UpdateGeneratedContentInput,
 	UpdatePersonaInput,
 	UpdateProfileInput,
 	type WritingProfile,
+	type WritingProfileWithRelations,
 } from "../../types/gw";
 import { t } from "../trpc-instance";
+
+const { generateContent } = await import("../../agents/ghostwriter");
+const { analyzePsychology } = await import(
+	"../../agents/psychological-profiler"
+);
+const { analyzeWritingStyle } = await import(
+	"../../agents/writing-style-profiler"
+);
+const { psyProfileModifier } = await import(
+	"../../agents/psy-profile-modifier"
+);
+const { writeProfileModifier } = await import(
+	"../../agents/write-profile-modifier"
+);
 
 export const contentRouter = t.router({
 	getUserData: t.procedure.query(async ({ ctx }) => {
@@ -104,7 +118,7 @@ export const contentRouter = t.router({
 		const writers = await db.query.ghostwriters.findMany({
 			where: and(
 				eq(ghostwriters.userId, ctx.userId),
-				isNull(ghostwriters.deletedAt) // Filter out soft-deleted ghostwriters
+				isNull(ghostwriters.deletedAt), // Filter out soft-deleted ghostwriters
 			),
 		});
 		return {
@@ -161,16 +175,16 @@ export const contentRouter = t.router({
 				orderBy: [desc(generatedContents.createdAt)],
 				with: {
 					writingProfile: {
-						columns: { id: true, name: true }
+						columns: { id: true, name: true },
 					},
 					psyProfile: {
-						columns: { id: true, name: true }
+						columns: { id: true, name: true },
 					},
 					persona: {
-						columns: { id: true, name: true }
+						columns: { id: true, name: true },
 					},
 					ghostwriter: {
-						columns: { id: true, name: true }
+						columns: { id: true, name: true },
 					},
 				},
 			});
@@ -243,16 +257,16 @@ export const contentRouter = t.router({
 					where: eq(generatedContents.id, id),
 					with: {
 						writingProfile: {
-							columns: { id: true, name: true }
+							columns: { id: true, name: true },
 						},
 						psyProfile: {
-							columns: { id: true, name: true }
+							columns: { id: true, name: true },
 						},
 						persona: {
-							columns: { id: true, name: true }
+							columns: { id: true, name: true },
 						},
 						ghostwriter: {
-							columns: { id: true, name: true }
+							columns: { id: true, name: true },
 						},
 					},
 				});
@@ -280,10 +294,10 @@ export const contentRouter = t.router({
 					where: eq(ghostwriters.id, id),
 					with: {
 						currentPsyProfile: {
-							columns: { id: true, name: true, content: true }
+							columns: { id: true, name: true, content: true },
 						},
 						currentWritingProfile: {
-							columns: { id: true, name: true, content: true }
+							columns: { id: true, name: true, content: true },
 						},
 					},
 				});
@@ -303,7 +317,9 @@ export const contentRouter = t.router({
 			}
 		}),
 	getPsyProfile: t.procedure
-		.input(z.object({ id: z.number().min(1, "Psychology profile ID is required") }))
+		.input(
+			z.object({ id: z.number().min(1, "Psychology profile ID is required") }),
+		)
 		.query(async ({ input: { id }, ctx }) => {
 			const db = getDB(ctx.env);
 			try {
@@ -311,14 +327,14 @@ export const contentRouter = t.router({
 					where: eq(psyProfiles.id, id),
 					with: {
 						ghostwriter: {
-							columns: { id: true, name: true }
+							columns: { id: true, name: true },
 						},
 					},
 				});
 				return {
 					success: true,
 					data: data,
-				} as ApiResponseSuccessType<PsyProfile>;
+				} as ApiResponseSuccessType<PsyProfileWithRelations>;
 			} catch (error) {
 				return {
 					success: false,
@@ -331,7 +347,9 @@ export const contentRouter = t.router({
 			}
 		}),
 	getWritingProfile: t.procedure
-		.input(z.object({ id: z.number().min(1, "Writing profile ID is required") }))
+		.input(
+			z.object({ id: z.number().min(1, "Writing profile ID is required") }),
+		)
 		.query(async ({ input: { id }, ctx }) => {
 			const db = getDB(ctx.env);
 			try {
@@ -339,14 +357,14 @@ export const contentRouter = t.router({
 					where: eq(writingProfiles.id, id),
 					with: {
 						ghostwriter: {
-							columns: { id: true, name: true }
+							columns: { id: true, name: true },
 						},
 					},
 				});
 				return {
 					success: true,
 					data: data,
-				} as ApiResponseSuccessType<WritingProfile>;
+				} as ApiResponseSuccessType<WritingProfileWithRelations>;
 			} catch (error) {
 				return {
 					success: false,
@@ -388,6 +406,66 @@ export const contentRouter = t.router({
 				} as ApiResponseErrorType;
 			}
 		}),
+	savePsyProfile: t.procedure
+		.input(SaveProfileInput)
+		.mutation(async ({ input: { name, content }, ctx }) => {
+			const db = getDB(ctx.env);
+			try {
+				const profile = await db
+					.insert(psyProfiles)
+					.values({
+						userId: ctx.userId,
+						ghostwriterId: null,
+						name,
+						content,
+					})
+					.returning();
+
+				return {
+					success: true,
+					data: profile[0],
+				} as ApiResponseSuccessType<PsyProfile>;
+			} catch (error) {
+				return {
+					success: false,
+					error: {
+						code: "INTERNAL_SERVER_ERROR",
+						message: "Failed to create psychology profile",
+						details: (error as Error).message,
+					},
+				} as ApiResponseErrorType;
+			}
+		}),
+	saveWritingProfile: t.procedure
+		.input(SaveProfileInput)
+		.mutation(async ({ input: { name, content }, ctx }) => {
+			const db = getDB(ctx.env);
+			try {
+				const profile = await db
+					.insert(writingProfiles)
+					.values({
+						userId: ctx.userId,
+						ghostwriterId: null,
+						name,
+						content,
+					})
+					.returning();
+
+				return {
+					success: true,
+					data: profile[0],
+				} as ApiResponseSuccessType<WritingProfile>;
+			} catch (error) {
+				return {
+					success: false,
+					error: {
+						code: "INTERNAL_SERVER_ERROR",
+						message: "Failed to create writing profile",
+						details: (error as Error).message,
+					},
+				} as ApiResponseErrorType;
+			}
+		}),
 	updatePersona: t.procedure
 		.input(UpdatePersonaInput)
 		.mutation(async ({ input: { id, name, description, content }, ctx }) => {
@@ -418,43 +496,52 @@ export const contentRouter = t.router({
 			}
 		}),
 	updateGhostwriter: t.procedure
-		.input(z.object({
-			id: z.number().min(1, "Ghostwriter ID is required"),
-			name: z.string().min(1, "Name is required").optional(),
-			description: z.string().optional(),
-			psyProfileId: z.number().optional(),
-			writingProfileId: z.number().optional(),
-		}))
-		.mutation(async ({ input: { id, name, description, psyProfileId, writingProfileId }, ctx }) => {
-			const db = getDB(ctx.env);
-			try {
-				const updateData: Partial<typeof ghostwriters.$inferInsert> = {};
-				if (name !== undefined) updateData.name = name;
-				if (description !== undefined) updateData.description = description;
-				if (psyProfileId !== undefined) updateData.psyProfileId = psyProfileId;
-				if (writingProfileId !== undefined) updateData.writingProfileId = writingProfileId;
+		.input(
+			z.object({
+				id: z.number().min(1, "Ghostwriter ID is required"),
+				name: z.string().min(1, "Name is required").optional(),
+				description: z.string().optional(),
+				psyProfileId: z.number().optional(),
+				writingProfileId: z.number().optional(),
+			}),
+		)
+		.mutation(
+			async ({
+				input: { id, name, description, psyProfileId, writingProfileId },
+				ctx,
+			}) => {
+				const db = getDB(ctx.env);
+				try {
+					const updateData: Partial<typeof ghostwriters.$inferInsert> = {};
+					if (name !== undefined) updateData.name = name;
+					if (description !== undefined) updateData.description = description;
+					if (psyProfileId !== undefined)
+						updateData.psyProfileId = psyProfileId;
+					if (writingProfileId !== undefined)
+						updateData.writingProfileId = writingProfileId;
 
-				const ghostwriter = await db
-					.update(ghostwriters)
-					.set(updateData)
-					.where(eq(ghostwriters.id, id))
-					.returning();
+					const ghostwriter = await db
+						.update(ghostwriters)
+						.set(updateData)
+						.where(eq(ghostwriters.id, id))
+						.returning();
 
-				return {
-					success: true,
-					data: ghostwriter[0],
-				} as ApiResponseSuccessType<Ghostwriter>;
-			} catch (error) {
-				return {
-					success: false,
-					error: {
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to update ghostwriter",
-						details: (error as Error).message,
-					},
-				} as ApiResponseErrorType;
-			}
-		}),
+					return {
+						success: true,
+						data: ghostwriter[0],
+					} as ApiResponseSuccessType<Ghostwriter>;
+				} catch (error) {
+					return {
+						success: false,
+						error: {
+							code: "INTERNAL_SERVER_ERROR",
+							message: "Failed to update ghostwriter",
+							details: (error as Error).message,
+						},
+					} as ApiResponseErrorType;
+				}
+			},
+		),
 	deletePersona: t.procedure
 		.input(z.object({ id: z.number().min(1, "Persona ID is required") }))
 		.mutation(async ({ input: { id }, ctx }) => {
@@ -615,77 +702,183 @@ export const contentRouter = t.router({
 			}
 		}),
 	deletePsyProfile: t.procedure
-		.input(z.object({ id: z.number().min(1, "Psychology profile ID is required") }))
+		.input(
+			z.object({ id: z.number().min(1, "Psychology profile ID is required") }),
+		)
 		.mutation(async ({ input: { id }, ctx }) => {
 			const db = getDB(ctx.env);
 			try {
 				// Start transaction to handle cascade nullify safely
-				await db.transaction(async (tx) => {
-					// 1. Nullify references in generatedContents
+				const deletedId = await db.transaction(async (tx) => {
+					// First, verify the profile exists and belongs to the user
+					const profile = await tx
+						.select()
+						.from(psyProfiles)
+						.where(
+							and(
+								eq(psyProfiles.id, id),
+								eq(psyProfiles.userId, ctx.userId)
+							)
+						)
+						.limit(1);
+
+					if (profile.length === 0) {
+						throw new Error("Profile not found or unauthorized");
+					}
+
+					// 1. Nullify references in generatedContents (only for this user)
 					await tx
 						.update(generatedContents)
 						.set({ psyProfileId: null })
-						.where(eq(generatedContents.psyProfileId, id));
+						.where(
+							and(
+								eq(generatedContents.psyProfileId, id),
+								eq(generatedContents.userId, ctx.userId)
+							)
+						);
 
-					// 2. Nullify references in ghostwriters
+					// 2. Nullify references in ghostwriters (only for this user)
 					await tx
 						.update(ghostwriters)
 						.set({ psyProfileId: null })
-						.where(eq(ghostwriters.psyProfileId, id));
+						.where(
+							and(
+								eq(ghostwriters.psyProfileId, id),
+								eq(ghostwriters.userId, ctx.userId)
+							)
+						);
 
-					// 3. Delete the profile itself
-					await tx.delete(psyProfiles).where(eq(psyProfiles.id, id));
+					// 3. Delete the profile itself (with user check)
+					const deleted = await tx
+						.delete(psyProfiles)
+						.where(
+							and(
+								eq(psyProfiles.id, id),
+								eq(psyProfiles.userId, ctx.userId)
+							)
+						)
+						.returning({ id: psyProfiles.id });
+
+					if (deleted.length === 0) {
+						throw new Error("Failed to delete profile");
+					}
+
+					return deleted[0].id;
 				});
 
 				return {
 					success: true,
-					data: id,
+					data: deletedId,
 				} as ApiResponseSuccessType<number>;
 			} catch (error) {
+				const errorMessage = (error as Error).message;
+				if (errorMessage === "Profile not found or unauthorized") {
+					return {
+						success: false,
+						error: {
+							code: "NOT_FOUND",
+							message: "Psychology profile not found or you don't have permission to delete it",
+							details: errorMessage,
+						},
+					} as ApiResponseErrorType;
+				}
 				return {
 					success: false,
 					error: {
 						code: "INTERNAL_SERVER_ERROR",
 						message: "Failed to delete psychology profile",
-						details: (error as Error).message,
+						details: errorMessage,
 					},
 				} as ApiResponseErrorType;
 			}
 		}),
 	deleteWritingProfile: t.procedure
-		.input(z.object({ id: z.number().min(1, "Writing profile ID is required") }))
+		.input(
+			z.object({ id: z.number().min(1, "Writing profile ID is required") }),
+		)
 		.mutation(async ({ input: { id }, ctx }) => {
 			const db = getDB(ctx.env);
 			try {
 				// Start transaction to handle cascade nullify safely
-				await db.transaction(async (tx) => {
-					// 1. Nullify references in generatedContents
+				const deletedId = await db.transaction(async (tx) => {
+					// First, verify the profile exists and belongs to the user
+					const profile = await tx
+						.select()
+						.from(writingProfiles)
+						.where(
+							and(
+								eq(writingProfiles.id, id),
+								eq(writingProfiles.userId, ctx.userId)
+							)
+						)
+						.limit(1);
+
+					if (profile.length === 0) {
+						throw new Error("Profile not found or unauthorized");
+					}
+
+					// 1. Nullify references in generatedContents (only for this user)
 					await tx
 						.update(generatedContents)
 						.set({ writingProfileId: null })
-						.where(eq(generatedContents.writingProfileId, id));
+						.where(
+							and(
+								eq(generatedContents.writingProfileId, id),
+								eq(generatedContents.userId, ctx.userId)
+							)
+						);
 
-					// 2. Nullify references in ghostwriters
+					// 2. Nullify references in ghostwriters (only for this user)
 					await tx
 						.update(ghostwriters)
 						.set({ writingProfileId: null })
-						.where(eq(ghostwriters.writingProfileId, id));
+						.where(
+							and(
+								eq(ghostwriters.writingProfileId, id),
+								eq(ghostwriters.userId, ctx.userId)
+							)
+						);
 
-					// 3. Delete the profile itself
-					await tx.delete(writingProfiles).where(eq(writingProfiles.id, id));
+					// 3. Delete the profile itself (with user check)
+					const deleted = await tx
+						.delete(writingProfiles)
+						.where(
+							and(
+								eq(writingProfiles.id, id),
+								eq(writingProfiles.userId, ctx.userId)
+							)
+						)
+						.returning({ id: writingProfiles.id });
+
+					if (deleted.length === 0) {
+						throw new Error("Failed to delete profile");
+					}
+
+					return deleted[0].id;
 				});
 
 				return {
 					success: true,
-					data: id,
+					data: deletedId,
 				} as ApiResponseSuccessType<number>;
 			} catch (error) {
+				const errorMessage = (error as Error).message;
+				if (errorMessage === "Profile not found or unauthorized") {
+					return {
+						success: false,
+						error: {
+							code: "NOT_FOUND",
+							message: "Writing profile not found or you don't have permission to delete it",
+							details: errorMessage,
+						},
+					} as ApiResponseErrorType;
+				}
 				return {
 					success: false,
 					error: {
 						code: "INTERNAL_SERVER_ERROR",
 						message: "Failed to delete writing profile",
-						details: (error as Error).message,
+						details: errorMessage,
 					},
 				} as ApiResponseErrorType;
 			}
@@ -1047,5 +1240,137 @@ export const contentRouter = t.router({
 				success: true,
 				data: response,
 			} as ApiResponseSuccessType<string>;
+		}),
+	modifyPsyProfile: t.procedure
+		.input(
+			z.object({
+				profileId: z.number().min(1, "Profile ID is required"),
+				newName: z.string().min(1, "New name is required"),
+				modifications: z.string().min(1, "Modifications are required"),
+			}),
+		)
+		.mutation(async ({ input: { profileId, newName, modifications }, ctx }) => {
+			const db = getDB(ctx.env);
+			const apiKey = await ctx.crypto.getApiKey("gemini");
+
+			if (!apiKey) {
+				throw new Error("MISSING_API_KEY");
+			}
+
+			try {
+				// Get the original profile
+				const originalProfile = await db.query.psyProfiles.findFirst({
+					where: eq(psyProfiles.id, profileId),
+				});
+
+				if (!originalProfile) {
+					return {
+						success: false,
+						error: {
+							code: "NOT_FOUND",
+							message: "Profile not found",
+							details: "The specified psychology profile does not exist",
+						},
+					} as ApiResponseErrorType;
+				}
+
+				// Generate the modified profile
+				const modifiedContent = await psyProfileModifier(
+					apiKey,
+					originalProfile.content,
+					modifications,
+				);
+
+				// Create the new profile
+				const newProfile = await db
+					.insert(psyProfiles)
+					.values({
+						userId: ctx.userId,
+						ghostwriterId: null, // New profiles are independent
+						name: newName,
+						content: modifiedContent,
+					})
+					.returning();
+
+				return {
+					success: true,
+					data: newProfile[0],
+				} as ApiResponseSuccessType<PsyProfile>;
+			} catch (error) {
+				return {
+					success: false,
+					error: {
+						code: "INTERNAL_SERVER_ERROR",
+						message: "Failed to modify psychology profile",
+						details: (error as Error).message,
+					},
+				} as ApiResponseErrorType;
+			}
+		}),
+	modifyWritingProfile: t.procedure
+		.input(
+			z.object({
+				profileId: z.number().min(1, "Profile ID is required"),
+				newName: z.string().min(1, "New name is required"),
+				modifications: z.string().min(1, "Modifications are required"),
+			}),
+		)
+		.mutation(async ({ input: { profileId, newName, modifications }, ctx }) => {
+			const db = getDB(ctx.env);
+			const apiKey = await ctx.crypto.getApiKey("gemini");
+
+			if (!apiKey) {
+				throw new Error("MISSING_API_KEY");
+			}
+
+			try {
+				// Get the original profile
+				const originalProfile = await db.query.writingProfiles.findFirst({
+					where: eq(writingProfiles.id, profileId),
+				});
+
+				if (!originalProfile) {
+					return {
+						success: false,
+						error: {
+							code: "NOT_FOUND",
+							message: "Profile not found",
+							details: "The specified writing profile does not exist",
+						},
+					} as ApiResponseErrorType;
+				}
+
+				// Generate the modified profile
+				const modifiedContent = await writeProfileModifier(
+					apiKey,
+					originalProfile.content,
+					modifications,
+				);
+
+				// Create the new profile
+				const newProfile = await db
+					.insert(writingProfiles)
+					.values({
+						userId: ctx.userId,
+						ghostwriterId: null, // New profiles are independent
+						name: newName,
+						content: modifiedContent,
+					})
+					.returning();
+
+				return {
+					success: true,
+					data: newProfile[0],
+				} as ApiResponseSuccessType<WritingProfile>;
+			} catch (error) {
+				return {
+					success: false,
+					error: {
+						code: "INTERNAL_SERVER_ERROR",
+						message: "Failed to modify writing profile",
+						details: (error as Error).message,
+					},
+				} as ApiResponseErrorType;
+			}
 		}),
 });

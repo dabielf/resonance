@@ -181,7 +181,7 @@ function RouteComponent() {
 					<TabsTrigger value="preview">Preview</TabsTrigger>
 				</TabsList>
 
-				<TabsContent value="edit" className="space-y-6">
+				<TabsContent value="edit" className="space-y-6 max-w-2xl mx-auto">
 					<div className="space-y-2">
 						<Label htmlFor={nameId}>Name *</Label>
 						<Input
@@ -229,14 +229,14 @@ function RouteComponent() {
 				</TabsContent>
 
 				<TabsContent value="preview" className="space-y-4">
-					<div className="rounded-lg border bg-muted/50 p-6">
+					<div className="rounded-lg border bg-muted/50 p-6 max-w-2xl mx-auto">
 						<h3 className="text-lg font-semibold mb-2">{name}</h3>
 						{description && (
 							<p className="text-sm text-muted-foreground mb-4">
 								{description}
 							</p>
 						)}
-						<div className="prose prose-sm dark:prose-invert max-w-none">
+						<div className="prose prose-sm dark:prose-invert">
 							<ReactMarkdown>{content}</ReactMarkdown>
 						</div>
 					</div>

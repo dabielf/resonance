@@ -31,6 +31,8 @@ import { Route as AppCreationWritersNewRouteImport } from './routes/app/creation
 import { Route as AppCreationPersonasNewRouteImport } from './routes/app/creation/personas/new'
 import { Route as AppCreationPersonasPersonaIdRouteImport } from './routes/app/creation/personas/$personaId'
 import { Route as AppCreationContentsContentIdRouteImport } from './routes/app/creation/contents/$contentId'
+import { Route as AppCreationProfilesWritingProfileIdRouteImport } from './routes/app/creation/profiles/writing.$profileId'
+import { Route as AppCreationProfilesPsyProfileIdRouteImport } from './routes/app/creation/profiles/psy.$profileId'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -147,6 +149,18 @@ const AppCreationContentsContentIdRoute =
     path: '/creation/contents/$contentId',
     getParentRoute: () => AppRouteRoute,
   } as any)
+const AppCreationProfilesWritingProfileIdRoute =
+  AppCreationProfilesWritingProfileIdRouteImport.update({
+    id: '/creation/profiles/writing/$profileId',
+    path: '/creation/profiles/writing/$profileId',
+    getParentRoute: () => AppRouteRoute,
+  } as any)
+const AppCreationProfilesPsyProfileIdRoute =
+  AppCreationProfilesPsyProfileIdRouteImport.update({
+    id: '/creation/profiles/psy/$profileId',
+    path: '/creation/profiles/psy/$profileId',
+    getParentRoute: () => AppRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -171,6 +185,8 @@ export interface FileRoutesByFullPath {
   '/app/creation/personas': typeof AppCreationPersonasIndexRoute
   '/app/creation/profiles': typeof AppCreationProfilesIndexRoute
   '/app/creation/writers/': typeof AppCreationWritersIndexRoute
+  '/app/creation/profiles/psy/$profileId': typeof AppCreationProfilesPsyProfileIdRoute
+  '/app/creation/profiles/writing/$profileId': typeof AppCreationProfilesWritingProfileIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -193,6 +209,8 @@ export interface FileRoutesByTo {
   '/app/creation/personas': typeof AppCreationPersonasIndexRoute
   '/app/creation/profiles': typeof AppCreationProfilesIndexRoute
   '/app/creation/writers': typeof AppCreationWritersIndexRoute
+  '/app/creation/profiles/psy/$profileId': typeof AppCreationProfilesPsyProfileIdRoute
+  '/app/creation/profiles/writing/$profileId': typeof AppCreationProfilesWritingProfileIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -218,6 +236,8 @@ export interface FileRoutesById {
   '/app/creation/personas/': typeof AppCreationPersonasIndexRoute
   '/app/creation/profiles/': typeof AppCreationProfilesIndexRoute
   '/app/creation/writers/': typeof AppCreationWritersIndexRoute
+  '/app/creation/profiles/psy/$profileId': typeof AppCreationProfilesPsyProfileIdRoute
+  '/app/creation/profiles/writing/$profileId': typeof AppCreationProfilesWritingProfileIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -244,6 +264,8 @@ export interface FileRouteTypes {
     | '/app/creation/personas'
     | '/app/creation/profiles'
     | '/app/creation/writers/'
+    | '/app/creation/profiles/psy/$profileId'
+    | '/app/creation/profiles/writing/$profileId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -266,6 +288,8 @@ export interface FileRouteTypes {
     | '/app/creation/personas'
     | '/app/creation/profiles'
     | '/app/creation/writers'
+    | '/app/creation/profiles/psy/$profileId'
+    | '/app/creation/profiles/writing/$profileId'
   id:
     | '__root__'
     | '/'
@@ -290,6 +314,8 @@ export interface FileRouteTypes {
     | '/app/creation/personas/'
     | '/app/creation/profiles/'
     | '/app/creation/writers/'
+    | '/app/creation/profiles/psy/$profileId'
+    | '/app/creation/profiles/writing/$profileId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -454,6 +480,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCreationContentsContentIdRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/app/creation/profiles/writing/$profileId': {
+      id: '/app/creation/profiles/writing/$profileId'
+      path: '/creation/profiles/writing/$profileId'
+      fullPath: '/app/creation/profiles/writing/$profileId'
+      preLoaderRoute: typeof AppCreationProfilesWritingProfileIdRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/app/creation/profiles/psy/$profileId': {
+      id: '/app/creation/profiles/psy/$profileId'
+      path: '/creation/profiles/psy/$profileId'
+      fullPath: '/app/creation/profiles/psy/$profileId'
+      preLoaderRoute: typeof AppCreationProfilesPsyProfileIdRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
   }
 }
 
@@ -488,6 +528,8 @@ interface AppRouteRouteChildren {
   AppCreationContentsIndexRoute: typeof AppCreationContentsIndexRoute
   AppCreationPersonasIndexRoute: typeof AppCreationPersonasIndexRoute
   AppCreationProfilesIndexRoute: typeof AppCreationProfilesIndexRoute
+  AppCreationProfilesPsyProfileIdRoute: typeof AppCreationProfilesPsyProfileIdRoute
+  AppCreationProfilesWritingProfileIdRoute: typeof AppCreationProfilesWritingProfileIdRoute
 }
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
@@ -508,6 +550,9 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppCreationContentsIndexRoute: AppCreationContentsIndexRoute,
   AppCreationPersonasIndexRoute: AppCreationPersonasIndexRoute,
   AppCreationProfilesIndexRoute: AppCreationProfilesIndexRoute,
+  AppCreationProfilesPsyProfileIdRoute: AppCreationProfilesPsyProfileIdRoute,
+  AppCreationProfilesWritingProfileIdRoute:
+    AppCreationProfilesWritingProfileIdRoute,
 }
 
 const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(

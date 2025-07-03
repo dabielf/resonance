@@ -648,12 +648,12 @@ export default function ContentGenerator() {
 								<div className="flex-1 overflow-hidden">
 									{contentMode === "display" ? (
 										<div className="h-full overflow-auto p-8 lg:p-12">
-											<div className="prose prose-lg prose-stone dark:prose-invert max-w-4xl mx-auto">
+											<div className="prose prose-stone dark:prose-invert max-w-2xl mx-auto">
 												<ReactMarkdown>{generatedContent}</ReactMarkdown>
 											</div>
 										</div>
 									) : (
-										<div className="h-full p-4 flex flex-col gap-3">
+										<div className="h-full p-4 flex flex-col gap-3 max-w-2xl mx-auto">
 											<Textarea
 												value={editedContent}
 												onChange={(e) => setEditedContent(e.target.value)}
@@ -674,6 +674,18 @@ export default function ContentGenerator() {
 											</div>
 										</div>
 									)}
+								</div>
+							</div>
+						) : generateContentMutation.isPending ? (
+							<div className="h-full flex items-center justify-center p-8">
+								<div className="text-center max-w-md">
+									<IconLoader2 className="h-16 w-16 text-primary mx-auto mb-4 animate-spin" />
+									<h3 className="text-lg font-semibold mb-2">
+										Generating Content...
+									</h3>
+									<p className="text-muted-foreground text-sm">
+										Your writer is crafting your content...
+									</p>
 								</div>
 							</div>
 						) : (

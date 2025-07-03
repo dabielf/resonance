@@ -259,7 +259,7 @@ Use tabs for content that can be edited and previewed:
 {mode === "edit" ? (
   <Textarea value={content} onChange={(e) => setContent(e.target.value)} />
 ) : (
-  <div className="prose prose-lg prose-stone dark:prose-invert max-w-4xl mx-auto">
+  <div className="prose prose-stone dark:prose-invert max-w-4xl mx-auto">
     <ReactMarkdown>{content}</ReactMarkdown>
   </div>
 )}

@@ -317,14 +317,14 @@ function RouteComponent() {
 
 				<TabsContent value="display" className="mt-6">
 					<div className="rounded-lg border bg-background p-8">
-						<div className="prose prose-lg prose-stone dark:prose-invert max-w-none">
+						<div className="prose prose-stone dark:prose-invert max-w-2xl mx-auto">
 							<ReactMarkdown>{content.content}</ReactMarkdown>
 						</div>
 					</div>
 				</TabsContent>
 
 				<TabsContent value="edit" className="mt-6 space-y-4">
-					<div className="space-y-2">
+					<div className="space-y-2 max-w-2xl mx-auto">
 						<Label htmlFor={contentEditorId}>Content</Label>
 						<Textarea
 							id={contentEditorId}
