@@ -17,6 +17,7 @@ import {
 	CreateOriginalContentInput,
 	CreatePersonaInput,
 	CreateProfileInput,
+	CreateWriterWithProfilesInput,
 	GenerateContentInput,
 	type GeneratedContent,
 	SaveContentInput,
@@ -40,6 +41,9 @@ const { psyProfileModifier } = await import(
 const { writeProfileModifier } = await import(
 	"../../agents/write-profile-modifier"
 );
+const { extractPersona } = await import(
+	"../../agents/persona-extractor"
+);
 
 export const contentRouter = t.router({
 	getUserData: t.procedure.query(async ({ ctx }) => {
@@ -58,6 +62,7 @@ export const contentRouter = t.router({
 						name: true,
 						psyProfileId: true,
 						writingProfileId: true,
+						basePersonaId: true,
 					},
 				},
 				psyProfiles: {
@@ -205,6 +210,29 @@ export const contentRouter = t.router({
 					currentWritingProfile: {
 						columns: { id: true, name: true, content: true },
 					},
+					basePersona: {
+						columns: { id: true, name: true, description: true },
+					},
+					originalContents: {
+						columns: { id: true, content: true, createdAt: true },
+						orderBy: [desc(originalContents.createdAt)],
+					},
+					generatedContents: {
+						columns: { 
+							id: true, 
+							prompt: true, 
+							content: true, 
+							userFeedBack: true,
+							isTrainingData: true,
+							createdAt: true 
+						},
+						with: {
+							persona: {
+								columns: { id: true, name: true },
+							},
+						},
+						orderBy: [desc(generatedContents.createdAt)],
+					},
 				},
 			});
 			
@@ -215,7 +243,17 @@ export const contentRouter = t.router({
 				});
 			}
 			
-			return data;
+			// Add computed statistics
+			const stats = {
+				originalContentCount: data.originalContents.length,
+				trainingDataCount: data.generatedContents.filter(c => c.isTrainingData).length,
+				totalGeneratedCount: data.generatedContents.length,
+			};
+			
+			return {
+				...data,
+				stats,
+			};
 		}),
 	getPsyProfile: t.procedure
 		.input(
@@ -344,11 +382,12 @@ export const contentRouter = t.router({
 				description: z.string().optional(),
 				psyProfileId: z.number().optional(),
 				writingProfileId: z.number().optional(),
+				basePersonaId: z.number().nullable().optional(),
 			}),
 		)
 		.mutation(
 			async ({
-				input: { id, name, description, psyProfileId, writingProfileId },
+				input: { id, name, description, psyProfileId, writingProfileId, basePersonaId },
 				ctx,
 			}) => {
 				const db = getDB(ctx.env);
@@ -359,6 +398,8 @@ export const contentRouter = t.router({
 					updateData.psyProfileId = psyProfileId;
 				if (writingProfileId !== undefined)
 					updateData.writingProfileId = writingProfileId;
+				if (basePersonaId !== undefined)
+					updateData.basePersonaId = basePersonaId;
 
 				const ghostwriter = await db
 					.update(ghostwriters)
@@ -706,6 +747,67 @@ export const contentRouter = t.router({
 
 			return gw[0];
 		}),
+	createWriterWithProfiles: t.procedure
+		.input(CreateWriterWithProfilesInput)
+		.mutation(async ({ input: { name, description, psyProfileId, writingProfileId, basePersonaId }, ctx }) => {
+			const db = getDB(ctx.env);
+			
+			// Validate that all provided profiles exist and belong to the user
+			const [psyProfile, writingProfile, basePersona] = await Promise.all([
+				// Psychology profile (required)
+				db.query.psyProfiles.findFirst({
+					where: and(eq(psyProfiles.id, psyProfileId), eq(psyProfiles.userId, ctx.userId)),
+				}),
+				// Writing profile (required) 
+				db.query.writingProfiles.findFirst({
+					where: and(eq(writingProfiles.id, writingProfileId), eq(writingProfiles.userId, ctx.userId)),
+				}),
+				// Base persona (optional)
+				basePersonaId
+					? db.query.personas.findFirst({
+						where: and(eq(personas.id, basePersonaId), eq(personas.userId, ctx.userId)),
+					})
+					: Promise.resolve(null),
+			]);
+
+			// Check if required profiles exist
+			if (!psyProfile) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Psychology profile not found or you don't have permission to access it",
+				});
+			}
+
+			if (!writingProfile) {
+				throw new TRPCError({
+					code: "NOT_FOUND", 
+					message: "Writing profile not found or you don't have permission to access it",
+				});
+			}
+
+			// Check if optional base persona exists (if provided)
+			if (basePersonaId && !basePersona) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Base persona not found or you don't have permission to access it",
+				});
+			}
+
+			// Create the ghostwriter with all associations
+			const ghostwriter = await db
+				.insert(ghostwriters)
+				.values({
+					userId: ctx.userId,
+					name,
+					description: description || "",
+					psyProfileId,
+					writingProfileId,
+					basePersonaId: basePersonaId || null,
+				})
+				.returning();
+
+			return ghostwriter[0];
+		}),
 	addOriginalContents: t.procedure
 		.input(CreateOriginalContentInput)
 		.mutation(async ({ input: { content, gwId }, ctx }) => {
@@ -722,6 +824,33 @@ export const contentRouter = t.router({
 				.returning();
 			
 			return contentArray.length;
+		}),
+	deleteOriginalContent: t.procedure
+		.input(z.object({ id: z.number().min(1, "Original content ID is required") }))
+		.mutation(async ({ input: { id }, ctx }) => {
+			const db = getDB(ctx.env);
+			
+			// First verify the content exists and belongs to a ghostwriter owned by the user
+			const content = await db
+				.select({
+					id: originalContents.id,
+					ghostwriterId: originalContents.ghostwriterId,
+					ghostwriterUserId: ghostwriters.userId,
+				})
+				.from(originalContents)
+				.innerJoin(ghostwriters, eq(originalContents.ghostwriterId, ghostwriters.id))
+				.where(eq(originalContents.id, id))
+				.limit(1);
+
+			if (content.length === 0 || content[0].ghostwriterUserId !== ctx.userId) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Original content not found or you don't have permission to delete it",
+				});
+			}
+
+			await db.delete(originalContents).where(eq(originalContents.id, id));
+			return id;
 		}),
 	createPsyProfile: t.procedure
 		.input(CreateProfileInput)
@@ -1036,5 +1165,220 @@ export const contentRouter = t.router({
 				.returning();
 
 			return newProfile[0];
+		}),
+	regenerateProfiles: t.procedure
+		.input(z.object({ 
+			ghostwriterId: z.number().min(1, "Ghostwriter ID is required"),
+			psyProfileName: z.string().min(1, "Psychology profile name is required"),
+			writingProfileName: z.string().min(1, "Writing profile name is required"),
+		}))
+		.mutation(async ({ input: { ghostwriterId, psyProfileName, writingProfileName }, ctx }) => {
+			const db = getDB(ctx.env);
+			
+			// Verify the ghostwriter exists and belongs to the user
+			const ghostwriter = await db.query.ghostwriters.findFirst({
+				where: and(eq(ghostwriters.id, ghostwriterId), eq(ghostwriters.userId, ctx.userId)),
+				with: {
+					originalContents: {
+						columns: { content: true },
+					},
+				},
+			});
+
+			if (!ghostwriter) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Ghostwriter not found or you don't have permission to access it",
+				});
+			}
+
+			if (ghostwriter.originalContents.length === 0) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "No original content found for this ghostwriter",
+				});
+			}
+
+			// Get the API key
+			const apiKey = await ctx.crypto.getApiKey("gemini");
+
+			if (!apiKey) {
+				throw new TRPCError({
+					code: "PRECONDITION_FAILED",
+					message: "API key not configured. Please add your Gemini API key in settings.",
+				});
+			}
+
+			// Extract content array
+			const contentArray = ghostwriter.originalContents.map(item => item.content);
+
+			// Generate both profiles in parallel
+			const [analyzedPsyProfile, analyzedWritingProfile] = await Promise.all([
+				analyzePsychology(apiKey, contentArray),
+				analyzeWritingStyle(apiKey, contentArray),
+			]);
+
+			// Get current profile IDs for deletion
+			const oldPsyProfileId = ghostwriter.psyProfileId;
+			const oldWritingProfileId = ghostwriter.writingProfileId;
+
+			// Create new profiles
+			const [psyProfile, writingProfile] = await Promise.all([
+				db.insert(psyProfiles).values({
+					userId: ctx.userId,
+					ghostwriterId: ghostwriterId,
+					name: psyProfileName,
+					content: analyzedPsyProfile,
+				}).returning(),
+				db.insert(writingProfiles).values({
+					userId: ctx.userId,
+					ghostwriterId: ghostwriterId,
+					name: writingProfileName,
+					content: analyzedWritingProfile,
+				}).returning(),
+			]);
+
+			// Update the ghostwriter with new profile IDs
+			await db
+				.update(ghostwriters)
+				.set({
+					psyProfileId: psyProfile[0].id,
+					writingProfileId: writingProfile[0].id,
+				})
+				.where(eq(ghostwriters.id, ghostwriterId));
+
+			// Delete old profiles if they existed (with proper cleanup)
+			if (oldPsyProfileId || oldWritingProfileId) {
+				const cleanupOperations = [];
+
+				if (oldPsyProfileId) {
+					// Nullify references in generatedContents before deletion
+					cleanupOperations.push(
+						db
+							.update(generatedContents)
+							.set({ psyProfileId: null })
+							.where(
+								and(
+									eq(generatedContents.psyProfileId, oldPsyProfileId),
+									eq(generatedContents.userId, ctx.userId),
+								),
+							),
+					);
+				}
+
+				if (oldWritingProfileId) {
+					// Nullify references in generatedContents before deletion
+					cleanupOperations.push(
+						db
+							.update(generatedContents)
+							.set({ writingProfileId: null })
+							.where(
+								and(
+									eq(generatedContents.writingProfileId, oldWritingProfileId),
+									eq(generatedContents.userId, ctx.userId),
+								),
+							),
+					);
+				}
+
+				// Execute cleanup operations first
+				if (cleanupOperations.length > 0) {
+					await Promise.all(cleanupOperations);
+				}
+
+				// Now delete the old profiles
+				const deleteOperations = [];
+				if (oldPsyProfileId) {
+					deleteOperations.push(
+						db.delete(psyProfiles).where(eq(psyProfiles.id, oldPsyProfileId))
+					);
+				}
+				if (oldWritingProfileId) {
+					deleteOperations.push(
+						db.delete(writingProfiles).where(eq(writingProfiles.id, oldWritingProfileId))
+					);
+				}
+
+				if (deleteOperations.length > 0) {
+					await Promise.all(deleteOperations);
+				}
+			}
+
+			return {
+				psyProfile: psyProfile[0],
+				writingProfile: writingProfile[0],
+			};
+		}),
+	extractPersonaFromContent: t.procedure
+		.input(z.object({
+			ghostwriterId: z.number().min(1, "Ghostwriter ID is required"),
+			personaName: z.string().min(1, "Persona name is required"),
+			setAsBasePersona: z.boolean().default(false),
+		}))
+		.mutation(async ({ input: { ghostwriterId, personaName, setAsBasePersona }, ctx }) => {
+			const db = getDB(ctx.env);
+			
+			// Get API key
+			const apiKey = await ctx.crypto.getApiKey("gemini");
+			if (!apiKey) {
+				throw new TRPCError({
+					code: "PRECONDITION_FAILED",
+					message: "API key not configured. Please add your Gemini API key in settings.",
+				});
+			}
+
+			// Verify the ghostwriter exists and belongs to the user, and get original content
+			const ghostwriter = await db.query.ghostwriters.findFirst({
+				where: and(eq(ghostwriters.id, ghostwriterId), eq(ghostwriters.userId, ctx.userId)),
+				with: {
+					originalContents: {
+						columns: { content: true },
+					},
+				},
+			});
+
+			if (!ghostwriter) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Ghostwriter not found or you don't have permission to access it",
+				});
+			}
+
+			if (ghostwriter.originalContents.length === 0) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "No original content found for this ghostwriter. Add some original content first.",
+				});
+			}
+
+			// Extract content array
+			const contentArray = ghostwriter.originalContents.map(item => item.content);
+
+			// Extract persona using AI
+			const extractedPersonaContent = await extractPersona(apiKey, contentArray);
+
+			// Create the persona
+			const persona = await db
+				.insert(personas)
+				.values({
+					userId: ctx.userId,
+					name: personaName,
+					description: `Persona extracted from ${ghostwriter.name}'s original content`,
+					content: extractedPersonaContent,
+				})
+				.returning();
+
+			// Optionally set as base persona for the ghostwriter
+			if (setAsBasePersona) {
+				await db
+					.update(ghostwriters)
+					.set({ basePersonaId: persona[0].id })
+					.where(eq(ghostwriters.id, ghostwriterId));
+			}
+
+			return {
+				persona: persona[0],
+				setAsBase: setAsBasePersona,
+			};
 		}),
 });

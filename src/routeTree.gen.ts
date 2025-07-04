@@ -19,15 +19,18 @@ import { Route as AppCreationIndexRouteImport } from './routes/app/creation/inde
 import { Route as AppContactsIndexRouteImport } from './routes/app/contacts/index'
 import { Route as AppProjectsAssistantRouteImport } from './routes/app/projects/assistant'
 import { Route as AppCreationWritersRouteImport } from './routes/app/creation/writers'
-import { Route as AppCreationResourcesRouteImport } from './routes/app/creation/resources'
 import { Route as AppCreationCreateRouteImport } from './routes/app/creation/create'
 import { Route as AppContactsListRouteImport } from './routes/app/contacts/list'
 import { Route as AppContactsEngageRouteImport } from './routes/app/contacts/engage'
 import { Route as AppCreationWritersIndexRouteImport } from './routes/app/creation/writers.index'
+import { Route as AppCreationResourcesIndexRouteImport } from './routes/app/creation/resources/index'
 import { Route as AppCreationProfilesIndexRouteImport } from './routes/app/creation/profiles/index'
 import { Route as AppCreationPersonasIndexRouteImport } from './routes/app/creation/personas/index'
 import { Route as AppCreationContentsIndexRouteImport } from './routes/app/creation/contents/index'
 import { Route as AppCreationWritersNewRouteImport } from './routes/app/creation/writers.new'
+import { Route as AppCreationWritersWriterIdRouteImport } from './routes/app/creation/writers.$writerId'
+import { Route as AppCreationResourcesResourceIdRouteImport } from './routes/app/creation/resources/$resourceId'
+import { Route as AppCreationProfilesNewRouteImport } from './routes/app/creation/profiles/new'
 import { Route as AppCreationPersonasNewRouteImport } from './routes/app/creation/personas/new'
 import { Route as AppCreationPersonasPersonaIdRouteImport } from './routes/app/creation/personas/$personaId'
 import { Route as AppCreationContentsContentIdRouteImport } from './routes/app/creation/contents/$contentId'
@@ -84,11 +87,6 @@ const AppCreationWritersRoute = AppCreationWritersRouteImport.update({
   path: '/creation/writers',
   getParentRoute: () => AppRouteRoute,
 } as any)
-const AppCreationResourcesRoute = AppCreationResourcesRouteImport.update({
-  id: '/creation/resources',
-  path: '/creation/resources',
-  getParentRoute: () => AppRouteRoute,
-} as any)
 const AppCreationCreateRoute = AppCreationCreateRouteImport.update({
   id: '/creation/create',
   path: '/creation/create',
@@ -109,6 +107,12 @@ const AppCreationWritersIndexRoute = AppCreationWritersIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppCreationWritersRoute,
 } as any)
+const AppCreationResourcesIndexRoute =
+  AppCreationResourcesIndexRouteImport.update({
+    id: '/creation/resources/',
+    path: '/creation/resources/',
+    getParentRoute: () => AppRouteRoute,
+  } as any)
 const AppCreationProfilesIndexRoute =
   AppCreationProfilesIndexRouteImport.update({
     id: '/creation/profiles/',
@@ -131,6 +135,23 @@ const AppCreationWritersNewRoute = AppCreationWritersNewRouteImport.update({
   id: '/new',
   path: '/new',
   getParentRoute: () => AppCreationWritersRoute,
+} as any)
+const AppCreationWritersWriterIdRoute =
+  AppCreationWritersWriterIdRouteImport.update({
+    id: '/$writerId',
+    path: '/$writerId',
+    getParentRoute: () => AppCreationWritersRoute,
+  } as any)
+const AppCreationResourcesResourceIdRoute =
+  AppCreationResourcesResourceIdRouteImport.update({
+    id: '/creation/resources/$resourceId',
+    path: '/creation/resources/$resourceId',
+    getParentRoute: () => AppRouteRoute,
+  } as any)
+const AppCreationProfilesNewRoute = AppCreationProfilesNewRouteImport.update({
+  id: '/creation/profiles/new',
+  path: '/creation/profiles/new',
+  getParentRoute: () => AppRouteRoute,
 } as any)
 const AppCreationPersonasNewRoute = AppCreationPersonasNewRouteImport.update({
   id: '/creation/personas/new',
@@ -171,7 +192,6 @@ export interface FileRoutesByFullPath {
   '/app/contacts/engage': typeof AppContactsEngageRoute
   '/app/contacts/list': typeof AppContactsListRoute
   '/app/creation/create': typeof AppCreationCreateRoute
-  '/app/creation/resources': typeof AppCreationResourcesRoute
   '/app/creation/writers': typeof AppCreationWritersRouteWithChildren
   '/app/projects/assistant': typeof AppProjectsAssistantRoute
   '/app/contacts': typeof AppContactsIndexRoute
@@ -180,10 +200,14 @@ export interface FileRoutesByFullPath {
   '/app/creation/contents/$contentId': typeof AppCreationContentsContentIdRoute
   '/app/creation/personas/$personaId': typeof AppCreationPersonasPersonaIdRoute
   '/app/creation/personas/new': typeof AppCreationPersonasNewRoute
+  '/app/creation/profiles/new': typeof AppCreationProfilesNewRoute
+  '/app/creation/resources/$resourceId': typeof AppCreationResourcesResourceIdRoute
+  '/app/creation/writers/$writerId': typeof AppCreationWritersWriterIdRoute
   '/app/creation/writers/new': typeof AppCreationWritersNewRoute
   '/app/creation/contents': typeof AppCreationContentsIndexRoute
   '/app/creation/personas': typeof AppCreationPersonasIndexRoute
   '/app/creation/profiles': typeof AppCreationProfilesIndexRoute
+  '/app/creation/resources': typeof AppCreationResourcesIndexRoute
   '/app/creation/writers/': typeof AppCreationWritersIndexRoute
   '/app/creation/profiles/psy/$profileId': typeof AppCreationProfilesPsyProfileIdRoute
   '/app/creation/profiles/writing/$profileId': typeof AppCreationProfilesWritingProfileIdRoute
@@ -196,7 +220,6 @@ export interface FileRoutesByTo {
   '/app/contacts/engage': typeof AppContactsEngageRoute
   '/app/contacts/list': typeof AppContactsListRoute
   '/app/creation/create': typeof AppCreationCreateRoute
-  '/app/creation/resources': typeof AppCreationResourcesRoute
   '/app/projects/assistant': typeof AppProjectsAssistantRoute
   '/app/contacts': typeof AppContactsIndexRoute
   '/app/creation': typeof AppCreationIndexRoute
@@ -204,10 +227,14 @@ export interface FileRoutesByTo {
   '/app/creation/contents/$contentId': typeof AppCreationContentsContentIdRoute
   '/app/creation/personas/$personaId': typeof AppCreationPersonasPersonaIdRoute
   '/app/creation/personas/new': typeof AppCreationPersonasNewRoute
+  '/app/creation/profiles/new': typeof AppCreationProfilesNewRoute
+  '/app/creation/resources/$resourceId': typeof AppCreationResourcesResourceIdRoute
+  '/app/creation/writers/$writerId': typeof AppCreationWritersWriterIdRoute
   '/app/creation/writers/new': typeof AppCreationWritersNewRoute
   '/app/creation/contents': typeof AppCreationContentsIndexRoute
   '/app/creation/personas': typeof AppCreationPersonasIndexRoute
   '/app/creation/profiles': typeof AppCreationProfilesIndexRoute
+  '/app/creation/resources': typeof AppCreationResourcesIndexRoute
   '/app/creation/writers': typeof AppCreationWritersIndexRoute
   '/app/creation/profiles/psy/$profileId': typeof AppCreationProfilesPsyProfileIdRoute
   '/app/creation/profiles/writing/$profileId': typeof AppCreationProfilesWritingProfileIdRoute
@@ -222,7 +249,6 @@ export interface FileRoutesById {
   '/app/contacts/engage': typeof AppContactsEngageRoute
   '/app/contacts/list': typeof AppContactsListRoute
   '/app/creation/create': typeof AppCreationCreateRoute
-  '/app/creation/resources': typeof AppCreationResourcesRoute
   '/app/creation/writers': typeof AppCreationWritersRouteWithChildren
   '/app/projects/assistant': typeof AppProjectsAssistantRoute
   '/app/contacts/': typeof AppContactsIndexRoute
@@ -231,10 +257,14 @@ export interface FileRoutesById {
   '/app/creation/contents/$contentId': typeof AppCreationContentsContentIdRoute
   '/app/creation/personas/$personaId': typeof AppCreationPersonasPersonaIdRoute
   '/app/creation/personas/new': typeof AppCreationPersonasNewRoute
+  '/app/creation/profiles/new': typeof AppCreationProfilesNewRoute
+  '/app/creation/resources/$resourceId': typeof AppCreationResourcesResourceIdRoute
+  '/app/creation/writers/$writerId': typeof AppCreationWritersWriterIdRoute
   '/app/creation/writers/new': typeof AppCreationWritersNewRoute
   '/app/creation/contents/': typeof AppCreationContentsIndexRoute
   '/app/creation/personas/': typeof AppCreationPersonasIndexRoute
   '/app/creation/profiles/': typeof AppCreationProfilesIndexRoute
+  '/app/creation/resources/': typeof AppCreationResourcesIndexRoute
   '/app/creation/writers/': typeof AppCreationWritersIndexRoute
   '/app/creation/profiles/psy/$profileId': typeof AppCreationProfilesPsyProfileIdRoute
   '/app/creation/profiles/writing/$profileId': typeof AppCreationProfilesWritingProfileIdRoute
@@ -250,7 +280,6 @@ export interface FileRouteTypes {
     | '/app/contacts/engage'
     | '/app/contacts/list'
     | '/app/creation/create'
-    | '/app/creation/resources'
     | '/app/creation/writers'
     | '/app/projects/assistant'
     | '/app/contacts'
@@ -259,10 +288,14 @@ export interface FileRouteTypes {
     | '/app/creation/contents/$contentId'
     | '/app/creation/personas/$personaId'
     | '/app/creation/personas/new'
+    | '/app/creation/profiles/new'
+    | '/app/creation/resources/$resourceId'
+    | '/app/creation/writers/$writerId'
     | '/app/creation/writers/new'
     | '/app/creation/contents'
     | '/app/creation/personas'
     | '/app/creation/profiles'
+    | '/app/creation/resources'
     | '/app/creation/writers/'
     | '/app/creation/profiles/psy/$profileId'
     | '/app/creation/profiles/writing/$profileId'
@@ -275,7 +308,6 @@ export interface FileRouteTypes {
     | '/app/contacts/engage'
     | '/app/contacts/list'
     | '/app/creation/create'
-    | '/app/creation/resources'
     | '/app/projects/assistant'
     | '/app/contacts'
     | '/app/creation'
@@ -283,10 +315,14 @@ export interface FileRouteTypes {
     | '/app/creation/contents/$contentId'
     | '/app/creation/personas/$personaId'
     | '/app/creation/personas/new'
+    | '/app/creation/profiles/new'
+    | '/app/creation/resources/$resourceId'
+    | '/app/creation/writers/$writerId'
     | '/app/creation/writers/new'
     | '/app/creation/contents'
     | '/app/creation/personas'
     | '/app/creation/profiles'
+    | '/app/creation/resources'
     | '/app/creation/writers'
     | '/app/creation/profiles/psy/$profileId'
     | '/app/creation/profiles/writing/$profileId'
@@ -300,7 +336,6 @@ export interface FileRouteTypes {
     | '/app/contacts/engage'
     | '/app/contacts/list'
     | '/app/creation/create'
-    | '/app/creation/resources'
     | '/app/creation/writers'
     | '/app/projects/assistant'
     | '/app/contacts/'
@@ -309,10 +344,14 @@ export interface FileRouteTypes {
     | '/app/creation/contents/$contentId'
     | '/app/creation/personas/$personaId'
     | '/app/creation/personas/new'
+    | '/app/creation/profiles/new'
+    | '/app/creation/resources/$resourceId'
+    | '/app/creation/writers/$writerId'
     | '/app/creation/writers/new'
     | '/app/creation/contents/'
     | '/app/creation/personas/'
     | '/app/creation/profiles/'
+    | '/app/creation/resources/'
     | '/app/creation/writers/'
     | '/app/creation/profiles/psy/$profileId'
     | '/app/creation/profiles/writing/$profileId'
@@ -396,13 +435,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCreationWritersRouteImport
       parentRoute: typeof AppRouteRoute
     }
-    '/app/creation/resources': {
-      id: '/app/creation/resources'
-      path: '/creation/resources'
-      fullPath: '/app/creation/resources'
-      preLoaderRoute: typeof AppCreationResourcesRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
     '/app/creation/create': {
       id: '/app/creation/create'
       path: '/creation/create'
@@ -431,6 +463,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCreationWritersIndexRouteImport
       parentRoute: typeof AppCreationWritersRoute
     }
+    '/app/creation/resources/': {
+      id: '/app/creation/resources/'
+      path: '/creation/resources'
+      fullPath: '/app/creation/resources'
+      preLoaderRoute: typeof AppCreationResourcesIndexRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/app/creation/profiles/': {
       id: '/app/creation/profiles/'
       path: '/creation/profiles'
@@ -458,6 +497,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/creation/writers/new'
       preLoaderRoute: typeof AppCreationWritersNewRouteImport
       parentRoute: typeof AppCreationWritersRoute
+    }
+    '/app/creation/writers/$writerId': {
+      id: '/app/creation/writers/$writerId'
+      path: '/$writerId'
+      fullPath: '/app/creation/writers/$writerId'
+      preLoaderRoute: typeof AppCreationWritersWriterIdRouteImport
+      parentRoute: typeof AppCreationWritersRoute
+    }
+    '/app/creation/resources/$resourceId': {
+      id: '/app/creation/resources/$resourceId'
+      path: '/creation/resources/$resourceId'
+      fullPath: '/app/creation/resources/$resourceId'
+      preLoaderRoute: typeof AppCreationResourcesResourceIdRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/app/creation/profiles/new': {
+      id: '/app/creation/profiles/new'
+      path: '/creation/profiles/new'
+      fullPath: '/app/creation/profiles/new'
+      preLoaderRoute: typeof AppCreationProfilesNewRouteImport
+      parentRoute: typeof AppRouteRoute
     }
     '/app/creation/personas/new': {
       id: '/app/creation/personas/new'
@@ -498,11 +558,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppCreationWritersRouteChildren {
+  AppCreationWritersWriterIdRoute: typeof AppCreationWritersWriterIdRoute
   AppCreationWritersNewRoute: typeof AppCreationWritersNewRoute
   AppCreationWritersIndexRoute: typeof AppCreationWritersIndexRoute
 }
 
 const AppCreationWritersRouteChildren: AppCreationWritersRouteChildren = {
+  AppCreationWritersWriterIdRoute: AppCreationWritersWriterIdRoute,
   AppCreationWritersNewRoute: AppCreationWritersNewRoute,
   AppCreationWritersIndexRoute: AppCreationWritersIndexRoute,
 }
@@ -516,7 +578,6 @@ interface AppRouteRouteChildren {
   AppContactsEngageRoute: typeof AppContactsEngageRoute
   AppContactsListRoute: typeof AppContactsListRoute
   AppCreationCreateRoute: typeof AppCreationCreateRoute
-  AppCreationResourcesRoute: typeof AppCreationResourcesRoute
   AppCreationWritersRoute: typeof AppCreationWritersRouteWithChildren
   AppProjectsAssistantRoute: typeof AppProjectsAssistantRoute
   AppContactsIndexRoute: typeof AppContactsIndexRoute
@@ -525,9 +586,12 @@ interface AppRouteRouteChildren {
   AppCreationContentsContentIdRoute: typeof AppCreationContentsContentIdRoute
   AppCreationPersonasPersonaIdRoute: typeof AppCreationPersonasPersonaIdRoute
   AppCreationPersonasNewRoute: typeof AppCreationPersonasNewRoute
+  AppCreationProfilesNewRoute: typeof AppCreationProfilesNewRoute
+  AppCreationResourcesResourceIdRoute: typeof AppCreationResourcesResourceIdRoute
   AppCreationContentsIndexRoute: typeof AppCreationContentsIndexRoute
   AppCreationPersonasIndexRoute: typeof AppCreationPersonasIndexRoute
   AppCreationProfilesIndexRoute: typeof AppCreationProfilesIndexRoute
+  AppCreationResourcesIndexRoute: typeof AppCreationResourcesIndexRoute
   AppCreationProfilesPsyProfileIdRoute: typeof AppCreationProfilesPsyProfileIdRoute
   AppCreationProfilesWritingProfileIdRoute: typeof AppCreationProfilesWritingProfileIdRoute
 }
@@ -538,7 +602,6 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppContactsEngageRoute: AppContactsEngageRoute,
   AppContactsListRoute: AppContactsListRoute,
   AppCreationCreateRoute: AppCreationCreateRoute,
-  AppCreationResourcesRoute: AppCreationResourcesRoute,
   AppCreationWritersRoute: AppCreationWritersRouteWithChildren,
   AppProjectsAssistantRoute: AppProjectsAssistantRoute,
   AppContactsIndexRoute: AppContactsIndexRoute,
@@ -547,9 +610,12 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppCreationContentsContentIdRoute: AppCreationContentsContentIdRoute,
   AppCreationPersonasPersonaIdRoute: AppCreationPersonasPersonaIdRoute,
   AppCreationPersonasNewRoute: AppCreationPersonasNewRoute,
+  AppCreationProfilesNewRoute: AppCreationProfilesNewRoute,
+  AppCreationResourcesResourceIdRoute: AppCreationResourcesResourceIdRoute,
   AppCreationContentsIndexRoute: AppCreationContentsIndexRoute,
   AppCreationPersonasIndexRoute: AppCreationPersonasIndexRoute,
   AppCreationProfilesIndexRoute: AppCreationProfilesIndexRoute,
+  AppCreationResourcesIndexRoute: AppCreationResourcesIndexRoute,
   AppCreationProfilesPsyProfileIdRoute: AppCreationProfilesPsyProfileIdRoute,
   AppCreationProfilesWritingProfileIdRoute:
     AppCreationProfilesWritingProfileIdRoute,

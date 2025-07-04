@@ -1,4 +1,4 @@
-import { IconEdit, IconEye, IconTrash } from "@tabler/icons-react";
+import { IconEdit, IconEye, IconPlus, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -208,6 +208,10 @@ function RouteComponent() {
 		}
 	};
 
+	const handleCreateProfile = () => {
+		navigate({ to: "/app/creation/profiles/new" });
+	};
+
 	const getWriterName = (ghostwriterId: number | null) => {
 		if (!ghostwriterId) return null;
 		const writer = writers.find((w) => w.id === ghostwriterId);
@@ -271,6 +275,10 @@ function RouteComponent() {
 						Manage your psychological and writing style profiles
 					</p>
 				</div>
+				<Button onClick={handleCreateProfile}>
+					<IconPlus className="h-4 w-4 mr-2" />
+					Create Profile
+				</Button>
 			</div>
 
 			{/* Tabs */}

@@ -12,6 +12,7 @@ export const GhostwriterSchema = z.object({
 	userId: z.number(),
 	psyProfileId: z.number().nullable(),
 	writingProfileId: z.number().nullable(),
+	basePersonaId: z.number().nullable(),
 	createdAt: z.string(),
 	updatedAt: z.string(),
 });
@@ -97,6 +98,14 @@ export const InsightSchema = z.object({
 export const CreateGhostwriterInput = z.object({
 	name: z.string().min(1, "Name is required"),
 	description: z.string().optional(),
+});
+
+export const CreateWriterWithProfilesInput = z.object({
+	name: z.string().min(1, "Name is required"),
+	description: z.string().optional(),
+	psyProfileId: z.number().min(1, "Psychology profile ID is required"),
+	writingProfileId: z.number().min(1, "Writing profile ID is required"),
+	basePersonaId: z.number().optional(),
 });
 
 export const CreateOriginalContentInput = z.object({
@@ -327,6 +336,7 @@ export type GeneratedContentWithRelations = z.infer<
 
 // Input types
 export type CreateGhostwriterData = z.infer<typeof CreateGhostwriterInput>;
+export type CreateWriterWithProfilesData = z.infer<typeof CreateWriterWithProfilesInput>;
 export type CreateOriginalContentData = z.infer<
 	typeof CreateOriginalContentInput
 >;

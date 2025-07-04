@@ -32,6 +32,9 @@ function RouteComponent() {
 				queryClient.invalidateQueries({
 					queryKey: trpc.contentRouter.listPersonas.queryKey(),
 				});
+				queryClient.invalidateQueries({
+					queryKey: trpc.contentRouter.getUserData.queryKey(),
+				});
 				navigate({ to: "/app/creation/personas" });
 			},
 			onError: (error) => {

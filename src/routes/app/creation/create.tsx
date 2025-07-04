@@ -9,8 +9,8 @@ import {
 	IconSettings,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useId, useState } from "react";
+import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
+import { useEffect, useId, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -71,6 +71,9 @@ export default function ContentGenerator() {
 	const [trainingDialogOpen, setTrainingDialogOpen] = useState(false);
 	const [userFeedback, setUserFeedback] = useState("");
 
+	// Auto-selection flag
+	const [hasAutoSelected, setHasAutoSelected] = useState(false);
+
 	// Fetch user data
 	const {
 		data,
@@ -79,12 +82,41 @@ export default function ContentGenerator() {
 	} = useQuery(trpc.contentRouter.getUserData.queryOptions());
 
 	const user = data;
+	const search = useSearch({ from: "/app/creation/create" }) as {
+		gwId?: string;
+	};
 
 	// Filter complete writers (those with both profiles)
 	const completeWriters =
 		user?.ghostwriters?.filter(
 			(writer) => writer.psyProfileId && writer.writingProfileId,
 		) || [];
+
+	// Auto-populate persona when writer is selected
+	useEffect(() => {
+		if (mode === "writer" && selectedWriterId) {
+			const writer = completeWriters.find(
+				(w) => w.id.toString() === selectedWriterId,
+			);
+			if (writer?.basePersonaId) {
+				setSelectedPersonaId(writer.basePersonaId.toString());
+			}
+		}
+	}, [selectedWriterId, mode, completeWriters]);
+
+	// Auto-select writer from URL query parameter (one-time only)
+	useEffect(() => {
+		const gwId = search.gwId;
+		if (gwId && completeWriters.length > 0 && !hasAutoSelected) {
+			const writerId = parseInt(gwId as string);
+			const writer = completeWriters.find((w) => w.id === writerId);
+			if (writer) {
+				setMode("writer");
+				setSelectedWriterId(writer.id.toString());
+				setHasAutoSelected(true);
+			}
+		}
+	}, [search.gwId, completeWriters, hasAutoSelected]);
 
 	// Generate content mutation
 	const generateContentMutation = useMutation(
@@ -103,7 +135,7 @@ export default function ContentGenerator() {
 	// Save content mutation
 	const saveContentMutation = useMutation(
 		trpc.contentRouter.saveGeneratedContent.mutationOptions({
-			onSuccess: (data) => {
+			onSuccess: () => {
 				toast.success("Content saved successfully");
 				queryClient.invalidateQueries({
 					queryKey: trpc.contentRouter.listGeneratedContents.queryKey(),

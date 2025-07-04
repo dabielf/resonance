@@ -1,40 +1,173 @@
 import {
 	IconBrain,
+	IconChevronDown,
 	IconDots,
 	IconEdit,
 	IconPlus,
 	IconTrash,
 	IconUser,
 } from "@tabler/icons-react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useId, useState } from "react";
+import { toast } from "sonner";
 import type { Ghostwriter } from "@worker/types/gw";
 import { Button } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/router";
 
 export const Route = createFileRoute("/app/creation/writers/")({
 	component: RouteComponent,
 });
 
+// Create Writer Button Component
+function CreateWriterButton({ 
+	psyProfiles, 
+	writingProfiles, 
+	onCreateFromContent, 
+	onCreateFromProfiles 
+}: {
+	psyProfiles: { id: number; name: string }[];
+	writingProfiles: { id: number; name: string }[];
+	onCreateFromContent: () => void;
+	onCreateFromProfiles: () => void;
+}) {
+	const hasProfiles = psyProfiles.length > 0 && writingProfiles.length > 0;
+
+	if (hasProfiles) {
+		return (
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<Button>
+						<IconPlus className="h-4 w-4 mr-2" />
+						Create Writer
+						<IconChevronDown className="h-4 w-4 ml-2" />
+					</Button>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="end">
+					<DropdownMenuItem onClick={onCreateFromContent}>
+						<IconPlus className="h-4 w-4 mr-2" />
+						Create from content
+					</DropdownMenuItem>
+					<DropdownMenuItem onClick={onCreateFromProfiles}>
+						<IconUser className="h-4 w-4 mr-2" />
+						Create from existing profiles
+					</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
+		);
+	}
+
+	return (
+		<Button onClick={onCreateFromContent}>
+			<IconPlus className="h-4 w-4 mr-2" />
+			Create Writer
+		</Button>
+	);
+}
+
 function RouteComponent() {
 	const navigate = useNavigate();
+	const queryClient = useQueryClient();
+	const nameId = useId();
+	const descriptionId = useId();
+
+	// Dialog state
+	const [dialogOpen, setDialogOpen] = useState(false);
+	const [formData, setFormData] = useState({
+		name: "",
+		description: "",
+		psyProfileId: "",
+		writingProfileId: "",
+		basePersonaId: "",
+	});
 
 	// Fetch writers using TRPC
 	const { data, isLoading, error } = useQuery(
 		trpc.contentRouter.listGhostwriters.queryOptions(),
 	);
 
+	// Fetch user data for profiles
+	const { data: userData } = useQuery(
+		trpc.contentRouter.getUserData.queryOptions(),
+	);
+
 	const writers = data || [];
+	const psyProfiles = userData?.psyProfiles || [];
+	const writingProfiles = userData?.writingProfiles || [];
+	const personas = userData?.personas || [];
+
+	// Mutation for creating writer with profiles
+	const createWriterMutation = useMutation(
+		trpc.contentRouter.createWriterWithProfiles.mutationOptions({
+			onSuccess: () => {
+				toast.success("Writer created successfully");
+				queryClient.invalidateQueries({
+					queryKey: trpc.contentRouter.listGhostwriters.queryKey(),
+				});
+				queryClient.invalidateQueries({
+					queryKey: trpc.contentRouter.getUserData.queryKey(),
+				});
+				setDialogOpen(false);
+				setFormData({
+					name: "",
+					description: "",
+					psyProfileId: "",
+					writingProfileId: "",
+					basePersonaId: "",
+				});
+			},
+			onError: (error) => {
+				toast.error(error.message || "Failed to create writer");
+			},
+		}),
+	);
 
 	const handleCreateWriter = () => {
 		navigate({ to: "/app/creation/writers/new" });
+	};
+
+	const handleCreateFromProfiles = () => {
+		setDialogOpen(true);
+	};
+
+	const handleFormSubmit = () => {
+		if (!formData.name.trim() || !formData.psyProfileId || !formData.writingProfileId) {
+			toast.error("Please fill in all required fields");
+			return;
+		}
+
+		createWriterMutation.mutate({
+			name: formData.name.trim(),
+			description: formData.description.trim() || undefined,
+			psyProfileId: parseInt(formData.psyProfileId),
+			writingProfileId: parseInt(formData.writingProfileId),
+			basePersonaId: formData.basePersonaId && formData.basePersonaId !== "-1" ? parseInt(formData.basePersonaId) : undefined,
+		});
 	};
 
 	const handleEditWriter = (writerId: number) => {
@@ -48,8 +181,10 @@ function RouteComponent() {
 	};
 
 	const handleGenerateContent = (writerId: number) => {
-		// TODO: Navigate to content generation when implemented
-		console.log("Generate content for writer:", writerId);
+		navigate({ 
+			to: "/app/creation/create", 
+			search: { gwId: writerId.toString() } 
+		});
 	};
 
 	if (isLoading) {
@@ -108,10 +243,12 @@ function RouteComponent() {
 							Create AI writers that learn your unique voice and style
 						</p>
 					</div>
-					<Button onClick={handleCreateWriter}>
-						<IconPlus className="h-4 w-4 mr-2" />
-						Create Writer
-					</Button>
+					<CreateWriterButton 
+						psyProfiles={psyProfiles}
+						writingProfiles={writingProfiles}
+						onCreateFromContent={handleCreateWriter}
+						onCreateFromProfiles={handleCreateFromProfiles}
+					/>
 				</div>
 
 				<div className="rounded-lg border bg-background p-12 text-center">
@@ -145,10 +282,12 @@ function RouteComponent() {
 						</span>
 					</p>
 				</div>
-				<Button onClick={handleCreateWriter}>
-					<IconPlus className="h-4 w-4 mr-2" />
-					Create Writer
-				</Button>
+				<CreateWriterButton 
+					psyProfiles={psyProfiles}
+					writingProfiles={writingProfiles}
+					onCreateFromContent={handleCreateWriter}
+					onCreateFromProfiles={handleCreateFromProfiles}
+				/>
 			</div>
 
 			{/* Writers List */}
@@ -164,6 +303,7 @@ function RouteComponent() {
 							className={`group flex items-center gap-6 py-5 transition-colors hover:bg-muted/50 cursor-pointer ${
 								index % 2 === 1 ? "bg-muted/10" : ""
 							}`}
+							onClick={() => navigate({ to: "/app/creation/writers/$writerId", params: { writerId: writer.id.toString() } })}
 						>
 							{/* Writer Info */}
 							<div className="flex-2 min-w-0">
@@ -233,6 +373,105 @@ function RouteComponent() {
 					);
 				})}
 			</div>
+
+			{/* Create Writer from Profiles Dialog */}
+			<Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<DialogTitle>Create Writer from Existing Profiles</DialogTitle>
+						<DialogDescription>
+							Create a new writer using your existing psychology and writing profiles.
+						</DialogDescription>
+					</DialogHeader>
+					<div className="space-y-4">
+						<div className="space-y-2">
+							<Label htmlFor={nameId}>Name *</Label>
+							<Input
+								id={nameId}
+								placeholder="Enter writer name"
+								value={formData.name}
+								onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+							/>
+						</div>
+						<div className="space-y-2">
+							<Label htmlFor={descriptionId}>Description</Label>
+							<Textarea
+								id={descriptionId}
+								placeholder="Optional description"
+								value={formData.description}
+								onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+								rows={3}
+							/>
+						</div>
+						<div className="space-y-2">
+							<Label htmlFor="psyProfile">Psychology Profile *</Label>
+							<Select
+								value={formData.psyProfileId}
+								onValueChange={(value) => setFormData({ ...formData, psyProfileId: value })}
+							>
+								<SelectTrigger>
+									<SelectValue placeholder="Select psychology profile" />
+								</SelectTrigger>
+								<SelectContent>
+									{psyProfiles.map((profile) => (
+										<SelectItem key={profile.id} value={profile.id.toString()}>
+											{profile.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="space-y-2">
+							<Label htmlFor="writingProfile">Writing Profile *</Label>
+							<Select
+								value={formData.writingProfileId}
+								onValueChange={(value) => setFormData({ ...formData, writingProfileId: value })}
+							>
+								<SelectTrigger>
+									<SelectValue placeholder="Select writing profile" />
+								</SelectTrigger>
+								<SelectContent>
+									{writingProfiles.map((profile) => (
+										<SelectItem key={profile.id} value={profile.id.toString()}>
+											{profile.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="space-y-2">
+							<Label htmlFor="basePersona">Base Persona (Optional)</Label>
+							<Select
+								value={formData.basePersonaId}
+								onValueChange={(value) => setFormData({ ...formData, basePersonaId: value })}
+							>
+								<SelectTrigger>
+									<SelectValue placeholder="Select base persona (optional)" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="-1">None</SelectItem>
+									{personas.map((persona) => (
+										<SelectItem key={persona.id} value={persona.id.toString()}>
+											{persona.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+					</div>
+					<DialogFooter>
+						<Button variant="outline" onClick={() => setDialogOpen(false)}>
+							Cancel
+						</Button>
+						<Button 
+							onClick={handleFormSubmit}
+							disabled={createWriterMutation.isPending}
+						>
+							{createWriterMutation.isPending ? "Creating..." : "Create Writer"}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }

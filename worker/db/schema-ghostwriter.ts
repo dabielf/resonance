@@ -20,6 +20,7 @@ export const ghostwriters = sqliteTable(
 		avatarUrl: text("avatar_url"),
 		psyProfileId: integer("psy_profile_id"), // Remove reference here, add it later
 		writingProfileId: integer("writing_profile_id"), // Remove reference here, add it later
+		basePersonaId: integer("base_persona_id"), // Optional default persona for this writer
 		psyProfileRating: integer("psy_profile_rating").default(50), // 1-100
 		writingProfileRating: integer("writing_profile_rating").default(50), // 1-100
 		psyCritic: text("psy_critic"),
@@ -34,6 +35,7 @@ export const ghostwriters = sqliteTable(
 	(table) => [
 		index("ghostwriter_user_id_idx").on(table.userId),
 		index("ghostwriter_deleted_at_idx").on(table.deletedAt), // Index for filtering soft deletes
+		index("ghostwriter_base_persona_id_idx").on(table.basePersonaId), // Index for base persona lookups
 		uniqueIndex("ghostwriter_user_name_idx").on(table.userId, table.name), // unique per user
 	],
 );
@@ -210,6 +212,10 @@ export const ghostwritersRelations = relations(ghostwriters, ({ one, many }) => 
 	currentWritingProfile: one(writingProfiles, {
 		fields: [ghostwriters.writingProfileId],
 		references: [writingProfiles.id],
+	}),
+	basePersona: one(personas, {
+		fields: [ghostwriters.basePersonaId],
+		references: [personas.id],
 	}),
 	originalContents: many(originalContents),
 	generatedContents: many(generatedContents),
