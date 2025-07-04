@@ -1,6 +1,12 @@
 import { createRouter as createTanStackRouter } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createTRPCClient, httpBatchLink } from "@trpc/client";
+import { 
+  createTRPCClient, 
+  httpBatchLink, 
+  httpLink,
+  splitLink,
+  isNonJsonSerializable 
+} from "@trpc/client";
 import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
 
 // Import the generated route tree
@@ -19,8 +25,14 @@ export const queryClient = new QueryClient({
 export const trpc = createTRPCOptionsProxy<AppRouter>({
   client: createTRPCClient({
     links: [
-      httpBatchLink({
-        url: "/trpc",
+      splitLink({
+        condition: (op) => isNonJsonSerializable(op.input),
+        true: httpLink({
+          url: "/trpc",
+        }),
+        false: httpBatchLink({
+          url: "/trpc",
+        }),
       }),
     ],
   }),
