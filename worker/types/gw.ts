@@ -189,25 +189,17 @@ export const CustomizeProfileInput = z.object({
 	modifications: z.string().min(1, "Modifications are required"),
 });
 
-// File conversion schemas
+// File conversion schemas - Simplified for TRPC file handling
 export const PdfToTxtSchema = z.object({
-	pdfFile: z.custom<File | Blob | ArrayBuffer>(
-		(val) =>
-			val instanceof File || val instanceof Blob || val instanceof ArrayBuffer,
-		{ message: "Must be a File, Blob, or ArrayBuffer" },
-	),
-	title: z.string(),
+	pdfFile: z.any(), // Accept any file object - validation happens in the parser
+	title: z.string().min(1, "Title is required"),
 	maxPages: z.number().int().positive().optional(),
 	encoding: z.enum(["utf-8", "utf-16", "ascii"]).optional().default("utf-8"),
 });
 
 export const EpubToTxtSchema = z.object({
-	epubFile: z.custom<File | Blob | ArrayBuffer>(
-		(val) =>
-			val instanceof File || val instanceof Blob || val instanceof ArrayBuffer,
-		{ message: "Must be a File, Blob, or ArrayBuffer" },
-	),
-	title: z.string(),
+	epubFile: z.any(), // Accept any file object - validation happens in the parser
+	title: z.string().min(1, "Title is required"),
 	includeMetadata: z.boolean().optional().default(false),
 	chapterSeparator: z.string().optional().default("\n\n===\n\n"),
 });

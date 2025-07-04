@@ -6,6 +6,7 @@ import {
 	IconEdit,
 	IconEye,
 	IconLoader2,
+	IconPlus,
 	IconSettings,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -61,7 +62,7 @@ export default function ContentGenerator() {
 	const [selectedWritingProfileId, setSelectedWritingProfileId] =
 		useState<string>("");
 	const [selectedPersonaId, setSelectedPersonaId] = useState<string>("");
-	const [selectedInsightId] = useState<string>("");
+	const [selectedInsightId, setSelectedInsightId] = useState<string>("");
 	const [topic, setTopic] = useState("");
 	const [generatedContent, setGeneratedContent] = useState<string | null>(null);
 	const [contentMode, setContentMode] = useState<ContentMode>("display");
@@ -70,6 +71,9 @@ export default function ContentGenerator() {
 	// Training dialog state
 	const [trainingDialogOpen, setTrainingDialogOpen] = useState(false);
 	const [userFeedback, setUserFeedback] = useState("");
+
+	// Insight dialog state
+	const [insightDialogOpen, setInsightDialogOpen] = useState(false);
 
 	// Auto-selection flag
 	const [hasAutoSelected, setHasAutoSelected] = useState(false);
@@ -80,6 +84,17 @@ export default function ContentGenerator() {
 		isLoading: isLoadingData,
 		error: dataError,
 	} = useQuery(trpc.contentRouter.getUserData.queryOptions());
+
+	// Fetch insights for selected persona
+	const {
+		data: personaInsights,
+		isLoading: isLoadingInsights,
+	} = useQuery(
+		trpc.resourceRouter.listInsightsForPersona.queryOptions(
+			{ personaId: parseInt(selectedPersonaId) },
+			{ enabled: !!selectedPersonaId }
+		)
+	);
 
 	const user = data;
 	const search = useSearch({ from: "/app/creation/create" }) as {
@@ -324,6 +339,21 @@ export default function ContentGenerator() {
 		setUserFeedback("");
 	};
 
+	// Insight handlers
+	const handleSelectInsight = (insightId: string) => {
+		setSelectedInsightId(insightId);
+		setInsightDialogOpen(false);
+	};
+
+	const handleResetInsight = () => {
+		setSelectedInsightId("");
+	};
+
+	// Get selected insight details
+	const selectedInsight = personaInsights?.find(
+		(insight) => insight.id.toString() === selectedInsightId
+	);
+
 	// Loading state
 	if (isLoadingData) {
 		return (
@@ -536,7 +566,7 @@ export default function ContentGenerator() {
 							/>
 						</div>
 
-						{/* Insights Selector (Placeholder) */}
+						{/* Insights Selector */}
 						<div>
 							<label
 								htmlFor="insights-select"
@@ -544,14 +574,50 @@ export default function ContentGenerator() {
 							>
 								Insights{" "}
 								<span className="text-xs text-muted-foreground">
-									(Coming soon)
+									(Optional)
 								</span>
 							</label>
-							<Select disabled>
-								<SelectTrigger>
-									<SelectValue placeholder="Choose insights" />
-								</SelectTrigger>
-							</Select>
+							{selectedPersonaId && personaInsights && personaInsights.length > 0 ? (
+								selectedInsightId ? (
+									<div className="flex items-center gap-2">
+										<div className="flex-1 px-3 py-2 border rounded-md bg-muted/50">
+											<span className="text-sm font-medium">
+												{selectedInsight?.title}
+											</span>
+											<div className="text-xs text-muted-foreground mt-1">
+												From: {selectedInsight?.resourceContent?.title}
+											</div>
+										</div>
+										<Button
+											type="button"
+											variant="outline"
+											size="sm"
+											onClick={handleResetInsight}
+										>
+											Reset
+										</Button>
+									</div>
+								) : (
+									<Button
+										type="button"
+										variant="outline"
+										onClick={() => setInsightDialogOpen(true)}
+										className="w-full justify-start"
+										disabled={isLoadingInsights}
+									>
+										<IconPlus className="h-4 w-4 mr-2" />
+										{isLoadingInsights ? "Loading insights..." : "Add Insight"}
+									</Button>
+								)
+							) : (
+								<div className="px-3 py-2 border rounded-md bg-muted/20 text-sm text-muted-foreground">
+									{!selectedPersonaId
+										? "Select a persona to see available insights"
+										: isLoadingInsights
+										? "Loading insights..."
+										: "No insights available for this persona"}
+								</div>
+							)}
 						</div>
 
 						{/* Generate Button */}
@@ -772,6 +838,76 @@ export default function ContentGenerator() {
 							{saveContentMutation.isPending
 								? "Saving..."
 								: "Save as Training Data"}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			{/* Insight Selection Dialog */}
+			<Dialog open={insightDialogOpen} onOpenChange={setInsightDialogOpen}>
+				<DialogContent className="max-w-2xl">
+					<DialogHeader>
+						<DialogTitle>Select Insight</DialogTitle>
+						<DialogDescription>
+							Choose an insight to include in your content generation.
+						</DialogDescription>
+					</DialogHeader>
+					<div className="max-h-96 overflow-y-auto">
+						{personaInsights && personaInsights.length > 0 ? (
+							<div className="space-y-3">
+								{personaInsights.map((insight) => (
+									<div
+										key={insight.id}
+										className="border rounded-lg p-4 cursor-pointer hover:bg-muted/50 transition-colors"
+										onClick={() => handleSelectInsight(insight.id.toString())}
+									>
+										<div className="flex justify-between items-start mb-2">
+											<h4 className="font-medium">{insight.title}</h4>
+											<span className="text-xs text-muted-foreground">
+												{insight.resourceContent?.title}
+											</span>
+										</div>
+										<ul className="text-sm text-muted-foreground space-y-1">
+											{typeof insight.keyPoints === 'string' 
+												? JSON.parse(insight.keyPoints).slice(0, 3).map((point: string, index: number) => (
+													<li key={index} className="flex items-start">
+														<span className="mr-2">•</span>
+														<span>{point}</span>
+													</li>
+												))
+												: insight.keyPoints.slice(0, 3).map((point, index) => (
+													<li key={index} className="flex items-start">
+														<span className="mr-2">•</span>
+														<span>{point}</span>
+													</li>
+												))
+											}
+											{(typeof insight.keyPoints === 'string' 
+												? JSON.parse(insight.keyPoints).length > 3
+												: insight.keyPoints.length > 3
+											) && (
+												<li className="text-xs italic">
+													...and {(typeof insight.keyPoints === 'string' 
+														? JSON.parse(insight.keyPoints).length - 3
+														: insight.keyPoints.length - 3
+													)} more points
+												</li>
+											)}
+										</ul>
+									</div>
+								))}
+							</div>
+						) : (
+							<div className="text-center py-8">
+								<p className="text-muted-foreground">
+									No insights available for this persona.
+								</p>
+							</div>
+						)}
+					</div>
+					<DialogFooter>
+						<Button variant="outline" onClick={() => setInsightDialogOpen(false)}>
+							Cancel
 						</Button>
 					</DialogFooter>
 				</DialogContent>

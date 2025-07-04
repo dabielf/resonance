@@ -15,14 +15,36 @@ export async function epubToString(
 	const startTime = performance.now();
 
 	try {
-		// Get file size for logging
-		const fileSize =
-			epubFile instanceof ArrayBuffer ? epubFile.byteLength : epubFile.size;
-		console.log(`[EPUB] File size: ${(fileSize / 1024 / 1024).toFixed(2)} MB`);
+		// Handle different file input types (including serialized File objects from TRPC)
+		let buffer: ArrayBuffer;
+		let fileSize: number;
 
-		// Convert to ArrayBuffer for Workers
-		const buffer =
-			epubFile instanceof ArrayBuffer ? epubFile : await epubFile.arrayBuffer();
+		if (epubFile instanceof ArrayBuffer) {
+			buffer = epubFile;
+			fileSize = epubFile.byteLength;
+		} else if (epubFile instanceof File || epubFile instanceof Blob) {
+			buffer = await epubFile.arrayBuffer();
+			fileSize = epubFile.size;
+		} else if (epubFile && typeof epubFile === 'object' && epubFile.data) {
+			// Handle serialized File object from TRPC
+			if (epubFile.data instanceof ArrayBuffer) {
+				buffer = epubFile.data;
+				fileSize = epubFile.data.byteLength;
+			} else if (Array.isArray(epubFile.data)) {
+				buffer = new Uint8Array(epubFile.data).buffer;
+				fileSize = epubFile.data.length;
+			} else {
+				throw new Error("Invalid file data format");
+			}
+		} else if (epubFile && typeof epubFile === 'object' && epubFile.buffer) {
+			// Handle Buffer-like objects
+			buffer = epubFile.buffer instanceof ArrayBuffer ? epubFile.buffer : epubFile.buffer.buffer;
+			fileSize = epubFile.buffer.byteLength || epubFile.buffer.length;
+		} else {
+			throw new Error("Unsupported file format. Please upload a valid EPUB file.");
+		}
+
+		console.log(`[EPUB] File size: ${(fileSize / 1024 / 1024).toFixed(2)} MB`);
 
 		// Load the EPUB file as a ZIP
 		console.log("[EPUB] Loading ZIP archive...");
@@ -229,19 +251,40 @@ export async function pdfToString(
 	const startTime = performance.now();
 
 	try {
-		// Get file size
-		const fileSize =
-			pdfFile instanceof ArrayBuffer ? pdfFile.byteLength : pdfFile.size;
-		console.log(`[PDF] File size: ${(fileSize / 1024 / 1024).toFixed(2)} MB`);
-
-		// Convert to Uint8Array for unpdf
+		// Handle different file input types (including serialized File objects from TRPC)
 		let data: Uint8Array;
+		let fileSize: number;
+
 		if (pdfFile instanceof ArrayBuffer) {
 			data = new Uint8Array(pdfFile);
-		} else {
+			fileSize = pdfFile.byteLength;
+		} else if (pdfFile instanceof Uint8Array) {
+			data = pdfFile;
+			fileSize = pdfFile.byteLength;
+		} else if (pdfFile instanceof File || pdfFile instanceof Blob) {
 			const buffer = await pdfFile.arrayBuffer();
 			data = new Uint8Array(buffer);
+			fileSize = pdfFile.size;
+		} else if (pdfFile && typeof pdfFile === 'object' && pdfFile.data) {
+			// Handle serialized File object from TRPC
+			if (pdfFile.data instanceof ArrayBuffer) {
+				data = new Uint8Array(pdfFile.data);
+				fileSize = pdfFile.data.byteLength;
+			} else if (Array.isArray(pdfFile.data)) {
+				data = new Uint8Array(pdfFile.data);
+				fileSize = pdfFile.data.length;
+			} else {
+				throw new Error("Invalid file data format");
+			}
+		} else if (pdfFile && typeof pdfFile === 'object' && pdfFile.buffer) {
+			// Handle Buffer-like objects
+			data = new Uint8Array(pdfFile.buffer);
+			fileSize = pdfFile.buffer.byteLength || pdfFile.buffer.length;
+		} else {
+			throw new Error("Unsupported file format. Please upload a valid PDF file.");
 		}
+
+		console.log(`[PDF] File size: ${(fileSize / 1024 / 1024).toFixed(2)} MB`);
 
 		// Parse PDF
 		console.log("[PDF] Loading PDF document...");
@@ -297,14 +340,38 @@ export async function pdfToStringSimple(
 	const startTime = performance.now();
 
 	try {
-		const fileSize =
-			pdfFile instanceof ArrayBuffer ? pdfFile.byteLength : pdfFile.size;
+		// Handle different file input types (including serialized File objects from TRPC)
+		let buffer: ArrayBuffer;
+		let fileSize: number;
+
+		if (pdfFile instanceof ArrayBuffer) {
+			buffer = pdfFile;
+			fileSize = pdfFile.byteLength;
+		} else if (pdfFile instanceof File || pdfFile instanceof Blob) {
+			buffer = await pdfFile.arrayBuffer();
+			fileSize = pdfFile.size;
+		} else if (pdfFile && typeof pdfFile === 'object' && pdfFile.data) {
+			// Handle serialized File object from TRPC
+			if (pdfFile.data instanceof ArrayBuffer) {
+				buffer = pdfFile.data;
+				fileSize = pdfFile.data.byteLength;
+			} else if (Array.isArray(pdfFile.data)) {
+				buffer = new Uint8Array(pdfFile.data).buffer;
+				fileSize = pdfFile.data.length;
+			} else {
+				throw new Error("Invalid file data format");
+			}
+		} else if (pdfFile && typeof pdfFile === 'object' && pdfFile.buffer) {
+			// Handle Buffer-like objects
+			buffer = pdfFile.buffer instanceof ArrayBuffer ? pdfFile.buffer : pdfFile.buffer.buffer;
+			fileSize = pdfFile.buffer.byteLength || pdfFile.buffer.length;
+		} else {
+			throw new Error("Unsupported file format. Please upload a valid PDF file.");
+		}
+
 		console.log(
 			`[PDF-Simple] File size: ${(fileSize / 1024 / 1024).toFixed(2)} MB`,
 		);
-
-		const buffer =
-			pdfFile instanceof ArrayBuffer ? pdfFile : await pdfFile.arrayBuffer();
 
 		const bytes = new Uint8Array(buffer);
 		const decoder = new TextDecoder("utf-8");

@@ -1,5 +1,24 @@
 import { GoogleGenAI } from '@google/genai';
 
+// JSON Schema types for better type safety
+interface JsonSchemaProperty {
+    type: 'string' | 'number' | 'boolean' | 'array' | 'object';
+    items?: JsonSchemaProperty;
+    properties?: Record<string, JsonSchemaProperty>;
+    required?: string[];
+    minItems?: number;
+    maxItems?: number;
+}
+
+interface JsonSchema {
+    type: 'array' | 'object';
+    items?: JsonSchemaProperty;
+    properties?: Record<string, JsonSchemaProperty>;
+    required?: string[];
+    minItems?: number;
+    maxItems?: number;
+}
+
 interface CallAgentWithSystemParams {
     apiKey: string;
     agentName: string;
@@ -16,7 +35,7 @@ interface CallAgentWithJsonParams<T> {
     agentName: string;
     systemInstruction?: string;
     prompt: string;
-    responseSchema: T;
+    responseSchema: JsonSchema;
     maxTokens?: number;
     temperature?: number;
     topP?: number;
@@ -125,5 +144,6 @@ export async function callAgentWithJson<T>({
   }
 }
 
-// Export as geminiClient for backward compatibility
+// Export types and client
+export type { JsonSchema, JsonSchemaProperty };
 export const geminiClient = { callAgentWithSystem, callAgentWithJson };

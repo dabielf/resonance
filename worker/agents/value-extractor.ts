@@ -1,4 +1,4 @@
-import { callAgentWithJson } from "./clients/gemini-client.js";
+import { callAgentWithJson, type JsonSchema } from "./clients/gemini-client.js";
 
 // Define the structure for our value items
 export interface ValueItem {
@@ -92,24 +92,24 @@ ${persona}
 Now provide your analysis as a JSON array of value items:`;
 
 	// Define the schema for the expected response
-	const responseSchema = {
-		type: "ARRAY",
+	const responseSchema: JsonSchema = {
+		type: "array",
 		items: {
-			type: "OBJECT",
+			type: "object",
 			properties: {
-				title: { type: "STRING" },
+				title: { type: "string" },
 				keyPoints: {
-					type: "ARRAY",
-					items: { type: "STRING" },
-					minItems: "3",
-					maxItems: "5",
+					type: "array",
+					items: { type: "string" },
+					minItems: 3,
+					maxItems: 5,
 				},
-				rawContent: { type: "STRING" },
+				rawContent: { type: "string" },
 			},
 			required: ["title", "keyPoints", "rawContent"],
 		},
-		minItems: "10",
-		maxItems: "20",
+		minItems: 10,
+		maxItems: 20,
 	};
 
 	const response = await callAgentWithJson<ValueItem[]>({
