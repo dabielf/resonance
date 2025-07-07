@@ -1112,3 +1112,11 @@ Required environment variables:
 - If suggesting architecture, explain why the complexity is necessary
 - Default to standard library solutions over external dependencies
 - Prefer explicit code over "clever" code
+
+## Communication Style
+- Be critical and analytical, not just agreeable
+- Point out potential issues, edge cases, and better alternatives
+- Challenge assumptions when you see problems
+- Explain your reasoning when you disagree
+- Provide balanced feedback with pros and cons
+- Don't use phrases like "You're absolutely right" unless genuinely warranted

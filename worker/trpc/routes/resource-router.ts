@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDB } from "../../db";
 import {
@@ -9,6 +9,7 @@ import {
 } from "../../db/schema-ghostwriter";
 import {
 	TextToResourceSchema,
+	UpdateInsightInput,
 	ValueExtractorInput,
 } from "../../types/gw";
 import { t } from "../trpc-instance";
@@ -299,8 +300,11 @@ export const resourceRouter = t.router({
 
 	// List insights for a specific persona
 	listInsightsForPersona: t.procedure
-		.input(z.object({ personaId: z.number().min(1, "Persona ID is required") }))
-		.query(async ({ input: { personaId }, ctx }) => {
+		.input(z.object({ 
+			personaId: z.number().min(1, "Persona ID is required"),
+			filterGenerated: z.boolean().optional()
+		}))
+		.query(async ({ input: { personaId, filterGenerated }, ctx }) => {
 			const db = getDB(ctx.env);
 			
 			// Verify persona belongs to user
@@ -315,12 +319,16 @@ export const resourceRouter = t.router({
 				});
 			}
 
+			// Build where clause conditionally
+			const whereClause = and(
+				eq(insights.personaId, personaId),
+				eq(insights.userId, ctx.userId),
+				filterGenerated ? isNull(insights.generatedContentId) : undefined
+			);
+
 			// Get insights for this persona
 			const personaInsights = await db.query.insights.findMany({
-				where: and(
-					eq(insights.personaId, personaId),
-					eq(insights.userId, ctx.userId)
-				),
+				where: whereClause,
 				orderBy: [desc(insights.createdAt)],
 				with: {
 					resourceContent: {
@@ -443,6 +451,41 @@ export const resourceRouter = t.router({
 				.returning();
 
 			return insight[0];
+		}),
+
+	// Update insight
+	updateInsight: t.procedure
+		.input(UpdateInsightInput)
+		.mutation(async ({ input: { id, generatedContentId }, ctx }) => {
+			const db = getDB(ctx.env);
+			
+			// Verify ownership before update
+			const insight = await db.select().from(insights)
+				.where(and(eq(insights.id, id), eq(insights.userId, ctx.userId)))
+				.limit(1);
+
+			if (insight.length === 0) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Insight not found or you don't have permission to update it",
+				});
+			}
+
+			// Update insight
+			const updatedInsight = await db
+				.update(insights)
+				.set({ generatedContentId })
+				.where(and(eq(insights.id, id), eq(insights.userId, ctx.userId)))
+				.returning();
+
+			if (updatedInsight.length === 0) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: "Failed to update insight",
+				});
+			}
+
+			return updatedInsight[0];
 		}),
 
 	// Delete insight

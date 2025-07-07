@@ -1,7 +1,7 @@
 // Parser utilities optimized for Cloudflare Workers with nodejs_compat
 
 // EPUB to String Converter - Optimized for Cloudflare Workers
-import JSZip from "jszip";
+// Dynamic import for better code splitting
 
 /**
  * EPUB to string converter optimized for Cloudflare Workers
@@ -49,6 +49,9 @@ export async function epubToString(
 		// Load the EPUB file as a ZIP
 		console.log("[EPUB] Loading ZIP archive...");
 		const zipStartTime = performance.now();
+		
+		// Dynamic import for better code splitting
+		const JSZip = (await import("jszip")).default;
 		const zip = await JSZip.loadAsync(buffer);
 		console.log(
 			`[EPUB] ZIP loaded in ${(performance.now() - zipStartTime).toFixed(2)}ms`,
@@ -237,7 +240,7 @@ function fastExtractText(html: string): string {
 }
 
 // PDF to String Converter - Using unpdf for Cloudflare Workers
-import { extractText, getDocumentProxy } from "unpdf";
+// Dynamic import for better code splitting
 
 /**
  * PDF to string converter using unpdf
@@ -289,6 +292,9 @@ export async function pdfToString(
 		// Parse PDF
 		console.log("[PDF] Loading PDF document...");
 		const parseStartTime = performance.now();
+
+		// Dynamic import for better code splitting
+		const { extractText, getDocumentProxy } = await import("unpdf");
 
 		// Load the PDF using unpdf
 		const pdf = await getDocumentProxy(data);

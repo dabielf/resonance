@@ -5,6 +5,7 @@ import {
 	IconDownload,
 	IconEdit,
 	IconEye,
+	IconLoader2,
 	IconTrash,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -22,6 +23,13 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -42,10 +50,19 @@ function RouteComponent() {
 	const [trainingDialogOpen, setTrainingDialogOpen] = useState(false);
 	const [contentMode, setContentMode] = useState<ContentMode>("display");
 	const [editedContent, setEditedContent] = useState("");
+	const [editedTitle, setEditedTitle] = useState("");
 	const [userFeedback, setUserFeedback] = useState("");
+	
+	// Revision dialog state
+	const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
+	const [revisionRequest, setRevisionRequest] = useState("");
+	const [isRevising, setIsRevising] = useState(false);
+	
 	const contentId_numeric = parseInt(contentId);
 	const feedbackId = useId();
+	const titleEditorId = useId();
 	const contentEditorId = useId();
+	const revisionRequestId = useId();
 
 	// Fetch content data
 	const { data, isLoading, error } = useQuery(
@@ -93,10 +110,38 @@ function RouteComponent() {
 		}),
 	);
 
+	// Revise content mutation
+	const reviseContentMutation = useMutation(
+		trpc.contentRouter.reviseContent.mutationOptions({
+			onSuccess: () => {
+				setContentMode("display");
+				setRevisionDialogOpen(false);
+				setRevisionRequest("");
+				setIsRevising(false);
+				toast.success("Content revised successfully");
+				// Invalidate and refetch the content
+				queryClient.invalidateQueries({
+					queryKey: trpc.contentRouter.getGeneratedContent.queryKey({
+						id: contentId_numeric,
+					}),
+				});
+			},
+			onError: (error) => {
+				setIsRevising(false);
+				if (error.message === "MISSING_API_KEY") {
+					toast.error("API key required. Please check your settings.");
+				} else {
+					toast.error("Failed to revise content");
+				}
+			},
+		}),
+	);
+
 	// Update form state when content data loads
 	useEffect(() => {
 		if (content) {
 			setEditedContent(content.content);
+			setEditedTitle(content.prompt);
 			setUserFeedback(content.userFeedBack || "");
 		}
 	}, [content]);
@@ -107,6 +152,7 @@ function RouteComponent() {
 		updateContentMutation.mutate({
 			id: content.id,
 			content: editedContent,
+			prompt: editedTitle,
 		});
 	};
 
@@ -141,6 +187,34 @@ function RouteComponent() {
 			userFeedBack: userFeedback.trim() || undefined,
 		});
 		setTrainingDialogOpen(false);
+	};
+
+	// Revision handlers
+	const handleRequestRevision = () => {
+		setRevisionRequest("");
+		setRevisionDialogOpen(true);
+	};
+
+	const handleSubmitRevision = () => {
+		if (!revisionRequest.trim() || !content) return;
+
+		const contentToRevise = contentMode === "edit" ? editedContent : content.content;
+
+		// Ensure we have the required profile IDs
+		if (!content.psyProfile?.id || !content.writingProfile?.id) {
+			toast.error("Missing profile information required for revision");
+			return;
+		}
+
+		setIsRevising(true);
+		reviseContentMutation.mutate({
+			contentToRevise,
+			revisionRequest: revisionRequest.trim(),
+			psychologyProfileId: content.psyProfile.id,
+			writingProfileId: content.writingProfile.id,
+			personaProfileId: content.persona?.id,
+			contentId: contentId_numeric,
+		});
 	};
 
 	const handleDelete = () => {
@@ -262,30 +336,49 @@ function RouteComponent() {
 							{content.persona && <span>Persona: {content.persona.name}</span>}
 						</div>
 					</div>
-					<div className="flex items-center gap-2 ml-4">
-						{content.ghostwriter && (
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={handleToggleTraining}
-								disabled={updateContentMutation.isPending}
-							>
-								<IconBookmark className="h-4 w-4 mr-2" />
-								{content.isTrainingData ? "Remove Training" : "Add Training"}
-							</Button>
-						)}
-						<Button variant="outline" size="sm" onClick={handleCopyToClipboard}>
-							<IconCopy className="h-4 w-4 mr-2" />
-							Copy
-						</Button>
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={handleDownloadMarkdown}
-						>
-							<IconDownload className="h-4 w-4 mr-2" />
-							Download
-						</Button>
+					<div className="flex items-center gap-2 ml-8">
+						{/* Actions Menu */}
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={updateContentMutation.isPending || isRevising}
+								>
+									Actions
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end">
+								{content.ghostwriter && (
+									<DropdownMenuItem
+										onClick={handleToggleTraining}
+										disabled={updateContentMutation.isPending}
+									>
+										<IconBookmark className="h-4 w-4 mr-2" />
+										{content.isTrainingData
+											? "Remove From Training"
+											: "Add To Training"}
+									</DropdownMenuItem>
+								)}
+								<DropdownMenuItem 
+									onClick={handleRequestRevision}
+									disabled={!content.psyProfile?.id || !content.writingProfile?.id || isRevising}
+								>
+									<IconEdit className="h-4 w-4 mr-2" />
+									Ask for Revision
+								</DropdownMenuItem>
+								<DropdownMenuItem onClick={handleCopyToClipboard}>
+									<IconCopy className="h-4 w-4 mr-2" />
+									Copy to Clipboard
+								</DropdownMenuItem>
+								<DropdownMenuItem onClick={handleDownloadMarkdown}>
+									<IconDownload className="h-4 w-4 mr-2" />
+									Download as MD
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+
+						{/* Delete Button - kept separate for prominence */}
 						<Button
 							variant="outline"
 							size="sm"
@@ -324,17 +417,30 @@ function RouteComponent() {
 				</TabsContent>
 
 				<TabsContent value="edit" className="mt-6 space-y-4">
-					<div className="space-y-2 max-w-2xl mx-auto">
-						<Label htmlFor={contentEditorId}>Content</Label>
-						<Textarea
-							id={contentEditorId}
-							value={editedContent}
-							onChange={(e) => setEditedContent(e.target.value)}
-							className="min-h-[500px] font-mono text-sm resize-none"
-						/>
-						<p className="text-sm text-muted-foreground">
-							Use markdown formatting to structure your content.
-						</p>
+					<div className="space-y-4 max-w-2xl mx-auto">
+						<div className="space-y-2">
+							<Label htmlFor={titleEditorId}>Title</Label>
+							<Input
+								id={titleEditorId}
+								value={editedTitle}
+								onChange={(e) => setEditedTitle(e.target.value)}
+								placeholder="Enter the title for this content..."
+								className="font-mono text-sm"
+							/>
+						</div>
+						
+						<div className="space-y-2">
+							<Label htmlFor={contentEditorId}>Content</Label>
+							<Textarea
+								id={contentEditorId}
+								value={editedContent}
+								onChange={(e) => setEditedContent(e.target.value)}
+								className="min-h-[500px] font-mono text-sm resize-none"
+							/>
+							<p className="text-sm text-muted-foreground">
+								Use markdown formatting to structure your content.
+							</p>
+						</div>
 					</div>
 
 					{/* Save Button */}
@@ -424,6 +530,65 @@ function RouteComponent() {
 							disabled={deleteContentMutation.isPending}
 						>
 							{deleteContentMutation.isPending ? "Deleting..." : "Delete"}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			{/* Revision Dialog */}
+			<Dialog
+				open={revisionDialogOpen}
+				onOpenChange={(open) => !isRevising && setRevisionDialogOpen(open)}
+			>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>Ask for Revision</DialogTitle>
+						<DialogDescription>
+							Describe what changes you'd like to make to the content. The AI
+							will revise it while maintaining the same writing style and voice.
+						</DialogDescription>
+					</DialogHeader>
+					<div className="space-y-4">
+						<div className="space-y-2">
+							<Label htmlFor={revisionRequestId}>Revision Instructions</Label>
+							<Textarea
+								id={revisionRequestId}
+								value={revisionRequest}
+								onChange={(e) => setRevisionRequest(e.target.value)}
+								placeholder="e.g., Make it more formal, add more details about X, shorten the introduction..."
+								className="min-h-[120px] resize-none"
+								disabled={isRevising}
+							/>
+						</div>
+						{isRevising && (
+							<div className="flex items-center gap-3 text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
+								<IconLoader2 className="h-4 w-4 animate-spin" />
+								<span>Revising content... This may take 15-30 seconds.</span>
+							</div>
+						)}
+					</div>
+					<DialogFooter>
+						<Button
+							variant="outline"
+							onClick={() => setRevisionDialogOpen(false)}
+							disabled={isRevising}
+						>
+							Cancel
+						</Button>
+						<Button
+							onClick={handleSubmitRevision}
+							disabled={
+								reviseContentMutation.isPending || !revisionRequest.trim()
+							}
+						>
+							{reviseContentMutation.isPending ? (
+								<>
+									<IconLoader2 className="h-4 w-4 mr-2 animate-spin" />
+									Revising...
+								</>
+							) : (
+								"Submit Revision"
+							)}
 						</Button>
 					</DialogFooter>
 				</DialogContent>

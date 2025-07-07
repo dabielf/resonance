@@ -1,6 +1,8 @@
 import {
+	IconArrowBackUp,
 	IconBookmark,
 	IconBrain,
+	IconCheck,
 	IconCopy,
 	IconDownload,
 	IconEdit,
@@ -14,6 +16,7 @@ import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
 import { useEffect, useId, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
+import type { ContentHistory } from "@/../../worker/types/gw";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -29,6 +32,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
 	Select,
@@ -39,6 +43,12 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@/components/ui/accordion";
 import { trpc } from "@/router";
 
 export const Route = createFileRoute("/app/creation/create")({
@@ -53,6 +63,8 @@ export default function ContentGenerator() {
 	const generationModeId = useId();
 	const topicInputId = useId();
 	const feedbackId = useId();
+	const revisionRequestId = useId();
+	const saveTitleId = useId();
 	const queryClient = useQueryClient();
 
 	// State management
@@ -68,15 +80,34 @@ export default function ContentGenerator() {
 	const [contentMode, setContentMode] = useState<ContentMode>("display");
 	const [editedContent, setEditedContent] = useState<string>("");
 
+	// Content history state
+	const [contentHistory, setContentHistory] = useState<ContentHistory[]>([]);
+	const [currentVersionIndex, setCurrentVersionIndex] = useState<number>(0);
+
 	// Training dialog state
 	const [trainingDialogOpen, setTrainingDialogOpen] = useState(false);
 	const [userFeedback, setUserFeedback] = useState("");
+
+	// Save dialog state
+	const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+	const [saveTitle, setSaveTitle] = useState("");
+
+	// Revision dialog state
+	const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
+	const [revisionRequest, setRevisionRequest] = useState("");
+	const [isRevising, setIsRevising] = useState(false);
 
 	// Insight dialog state
 	const [insightDialogOpen, setInsightDialogOpen] = useState(false);
 
 	// Auto-selection flag
 	const [hasAutoSelected, setHasAutoSelected] = useState(false);
+
+	// Track previous writer to only auto-populate persona on writer change
+	const [previousWriterId, setPreviousWriterId] = useState<string>("");
+
+	// Track if content has been saved
+	const [isContentSaved, setIsContentSaved] = useState(false);
 
 	// Fetch user data
 	const {
@@ -86,14 +117,14 @@ export default function ContentGenerator() {
 	} = useQuery(trpc.contentRouter.getUserData.queryOptions());
 
 	// Fetch insights for selected persona
-	const {
-		data: personaInsights,
-		isLoading: isLoadingInsights,
-	} = useQuery(
+	const { data: personaInsights, isLoading: isLoadingInsights } = useQuery(
 		trpc.resourceRouter.listInsightsForPersona.queryOptions(
-			{ personaId: parseInt(selectedPersonaId) },
-			{ enabled: !!selectedPersonaId }
-		)
+			{ 
+				personaId: parseInt(selectedPersonaId),
+				filterGenerated: true 
+			},
+			{ enabled: !!selectedPersonaId },
+		),
 	);
 
 	const user = data;
@@ -107,17 +138,28 @@ export default function ContentGenerator() {
 			(writer) => writer.psyProfileId && writer.writingProfileId,
 		) || [];
 
-	// Auto-populate persona when writer is selected
+	// Auto-populate persona only when writer changes (not on every render)
 	useEffect(() => {
-		if (mode === "writer" && selectedWriterId) {
+		if (
+			mode === "writer" &&
+			selectedWriterId &&
+			selectedWriterId !== previousWriterId
+		) {
 			const writer = completeWriters.find(
 				(w) => w.id.toString() === selectedWriterId,
 			);
 			if (writer?.basePersonaId) {
 				setSelectedPersonaId(writer.basePersonaId.toString());
+			} else {
+				// Clear persona if writer has no base persona
+				setSelectedPersonaId("");
 			}
+			setPreviousWriterId(selectedWriterId);
+		} else if (mode === "custom" && previousWriterId) {
+			// Clear tracking when switching to custom mode
+			setPreviousWriterId("");
 		}
-	}, [selectedWriterId, mode, completeWriters]);
+	}, [selectedWriterId, mode, completeWriters, previousWriterId]);
 
 	// Auto-select writer from URL query parameter (one-time only)
 	useEffect(() => {
@@ -140,6 +182,10 @@ export default function ContentGenerator() {
 				setGeneratedContent(data);
 				setEditedContent(data);
 				setContentMode("display");
+				setIsContentSaved(false); // Reset saved state for new content
+				// Initialize content history with first generation
+				setContentHistory([{ contentGenerated: data }]);
+				setCurrentVersionIndex(0);
 			},
 			onError: (error) => {
 				console.error("Generation failed:", error);
@@ -152,6 +198,7 @@ export default function ContentGenerator() {
 		trpc.contentRouter.saveGeneratedContent.mutationOptions({
 			onSuccess: () => {
 				toast.success("Content saved successfully");
+				setIsContentSaved(true);
 				queryClient.invalidateQueries({
 					queryKey: trpc.contentRouter.listGeneratedContents.queryKey(),
 				});
@@ -163,9 +210,43 @@ export default function ContentGenerator() {
 		}),
 	);
 
+	// Revise content mutation
+	const reviseContentMutation = useMutation(
+		trpc.contentRouter.reviseContent.mutationOptions({
+			onSuccess: (data) => {
+				// Append revised content to history with the revision request
+				setContentHistory((prev) => [
+					...prev,
+					{
+						contentGenerated: data,
+						revisionAsked: revisionRequest,
+					},
+				]);
+				setCurrentVersionIndex((prev) => prev + 1);
+				setGeneratedContent(data);
+				setEditedContent(data);
+				setContentMode("display");
+				setIsContentSaved(false); // Reset saved state for revised content
+				setRevisionDialogOpen(false);
+				setRevisionRequest("");
+				setIsRevising(false);
+				toast.success("Content revised successfully");
+			},
+			onError: (error) => {
+				setIsRevising(false);
+				if (error.message === "MISSING_API_KEY") {
+					toast.error("API key required. Please check your settings.");
+				} else {
+					toast.error("Failed to revise content");
+				}
+				console.error("Revision failed:", error);
+			},
+		}),
+	);
+
 	// Handle form submission
 	const handleGenerate = () => {
-		if (!topic.trim()) return;
+		if (!isFormValid()) return;
 
 		let psychologyProfileId: number;
 		let writingProfileId: number;
@@ -217,8 +298,11 @@ export default function ContentGenerator() {
 
 	// Check if form is valid
 	const isFormValid = () => {
-		if (!topic.trim()) return false;
+		// Content validation: require either topic or insight
+		const hasContent = topic.trim() || selectedInsightId;
+		if (!hasContent) return false;
 
+		// Profile validation
 		if (mode === "writer") {
 			return !!selectedWriterId;
 		} else {
@@ -260,7 +344,7 @@ export default function ContentGenerator() {
 	};
 
 	// Save content handler
-	const handleSaveContent = (isTrainingData: boolean, feedback?: string) => {
+	const handleSaveContent = (isTrainingData: boolean, feedback?: string, customTitle?: string) => {
 		if (!generatedContent || !topic.trim()) return;
 
 		const params = getGenerationParams();
@@ -275,9 +359,10 @@ export default function ContentGenerator() {
 			psyProfileId: params.psychologyProfileId,
 			writingProfileId: params.writingProfileId,
 			personaProfileId: params.personaProfileId,
-			prompt: topic.trim(),
+			prompt: customTitle || topic.trim(),
 			userFeedback: feedback,
 			isTrainingData,
+			insightId: selectedInsightId ? parseInt(selectedInsightId) : undefined,
 		});
 	};
 
@@ -326,6 +411,19 @@ export default function ContentGenerator() {
 		toast.success("Content downloaded as markdown file");
 	};
 
+	// Save dialog handler
+	const handleOpenSaveDialog = () => {
+		setSaveTitle(selectedInsight ? selectedInsight.title : "");
+		setSaveDialogOpen(true);
+	};
+
+	// Confirm save content
+	const confirmSaveContent = () => {
+		handleSaveContent(false, undefined, saveTitle.trim() || undefined);
+		setSaveDialogOpen(false);
+		setSaveTitle("");
+	};
+
 	// Training data save handler
 	const handleSaveAsTrainingData = () => {
 		setUserFeedback("");
@@ -349,10 +447,72 @@ export default function ContentGenerator() {
 		setSelectedInsightId("");
 	};
 
+	// Revision handlers
+	const handleRequestRevision = () => {
+		setRevisionRequest("");
+		setRevisionDialogOpen(true);
+	};
+
+	const handleSubmitRevision = () => {
+		if (!revisionRequest.trim() || !generatedContent) return;
+
+		const params = getGenerationParams();
+		if (!params) return;
+
+		const contentToRevise =
+			contentMode === "edit" ? editedContent : generatedContent;
+
+		setIsRevising(true);
+		reviseContentMutation.mutate({
+			contentToRevise,
+			revisionRequest: revisionRequest.trim(),
+			psychologyProfileId: params.psychologyProfileId,
+			writingProfileId: params.writingProfileId,
+			personaProfileId: params.personaProfileId,
+			contentHistory: contentHistory.length > 0 ? contentHistory : undefined,
+		});
+	};
+
+	const handleBackToPreviousVersion = () => {
+		if (currentVersionIndex > 0) {
+			const newIndex = currentVersionIndex - 1;
+			setCurrentVersionIndex(newIndex);
+			const previousContent = contentHistory[newIndex].contentGenerated;
+			setGeneratedContent(previousContent);
+			setEditedContent(previousContent);
+			setIsContentSaved(false); // Reset saved state when reverting to previous version
+			toast.success(
+				`Reverted to version ${newIndex + 1} of ${contentHistory.length}`,
+			);
+		}
+	};
+
 	// Get selected insight details
 	const selectedInsight = personaInsights?.find(
-		(insight) => insight.id.toString() === selectedInsightId
+		(insight) => insight.id.toString() === selectedInsightId,
 	);
+
+	// Group insights by resource
+	const groupInsightsByResource = (insights: typeof personaInsights) => {
+		if (!insights) return {};
+		
+		const grouped = insights.reduce((acc, insight) => {
+			const resourceTitle = insight.resourceContent?.title || "Uncategorized";
+			if (!acc[resourceTitle]) {
+				acc[resourceTitle] = [];
+			}
+			acc[resourceTitle].push(insight);
+			return acc;
+		}, {} as Record<string, typeof insights>);
+		
+		// Sort resource names alphabetically
+		return Object.keys(grouped).sort().reduce((acc, key) => {
+			acc[key] = grouped[key];
+			return acc;
+		}, {} as Record<string, typeof insights>);
+	};
+
+	const groupedInsights = groupInsightsByResource(personaInsights);
 
 	// Loading state
 	if (isLoadingData) {
@@ -521,7 +681,7 @@ export default function ContentGenerator() {
 							</div>
 						)}
 
-						{/* Persona Selector (Placeholder) */}
+						{/* Persona Selector */}
 						<div>
 							<label
 								htmlFor="persona-select"
@@ -532,38 +692,36 @@ export default function ContentGenerator() {
 									(Optional)
 								</span>
 							</label>
-							<Select
-								value={selectedPersonaId}
-								onValueChange={setSelectedPersonaId}
-							>
-								<SelectTrigger>
-									<SelectValue placeholder="Choose persona" />
-								</SelectTrigger>
-								<SelectContent>
-									{user?.personas?.map((persona) => (
-										<SelectItem key={persona.id} value={persona.id.toString()}>
-											{persona.name}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</div>
-
-						{/* Topic Input */}
-						<div>
-							<label
-								htmlFor={topicInputId}
-								className="text-sm font-medium mb-3 block"
-							>
-								Topic <span className="text-destructive">*</span>
-							</label>
-							<Textarea
-								id={topicInputId}
-								value={topic}
-								onChange={(e) => setTopic(e.target.value)}
-								placeholder="What would you like to write about?"
-								className="min-h-[100px] resize-none"
-							/>
+							<div className="flex items-center gap-2">
+								<Select
+									value={selectedPersonaId}
+									onValueChange={setSelectedPersonaId}
+								>
+									<SelectTrigger>
+										<SelectValue placeholder="Choose persona" />
+									</SelectTrigger>
+									<SelectContent>
+										{user?.personas?.map((persona) => (
+											<SelectItem
+												key={persona.id}
+												value={persona.id.toString()}
+											>
+												{persona.name}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+								{selectedPersonaId && (
+									<Button
+										type="button"
+										variant="outline"
+										size="sm"
+										onClick={() => setSelectedPersonaId("")}
+									>
+										Clear
+									</Button>
+								)}
+							</div>
 						</div>
 
 						{/* Insights Selector */}
@@ -577,7 +735,9 @@ export default function ContentGenerator() {
 									(Optional)
 								</span>
 							</label>
-							{selectedPersonaId && personaInsights && personaInsights.length > 0 ? (
+							{selectedPersonaId &&
+							personaInsights &&
+							personaInsights.length > 0 ? (
 								selectedInsightId ? (
 									<div className="flex items-center gap-2">
 										<div className="flex-1 px-3 py-2 border rounded-md bg-muted/50">
@@ -614,10 +774,40 @@ export default function ContentGenerator() {
 									{!selectedPersonaId
 										? "Select a persona to see available insights"
 										: isLoadingInsights
-										? "Loading insights..."
-										: "No insights available for this persona"}
+											? "Loading insights..."
+											: "No insights available for this persona"}
 								</div>
 							)}
+						</div>
+
+						{/* Topic Input / Additional Instructions */}
+						<div>
+							<label
+								htmlFor={topicInputId}
+								className="text-sm font-medium mb-3 block"
+							>
+								{selectedInsightId ? (
+									"Additional Instructions"
+								) : (
+									<>
+										Topic <span className="text-destructive">*</span>
+									</>
+								)}{" "}
+								<span className="text-xs text-muted-foreground">
+									{selectedInsightId ? "(Optional)" : ""}
+								</span>
+							</label>
+							<Textarea
+								id={topicInputId}
+								value={topic}
+								onChange={(e) => setTopic(e.target.value)}
+								placeholder={
+									selectedInsightId
+										? "Any additional guidance or modifications to the insight?"
+										: "What would you like to write about?"
+								}
+								className="min-h-[100px] resize-none"
+							/>
 						</div>
 
 						{/* Generate Button */}
@@ -679,7 +869,21 @@ export default function ContentGenerator() {
 							<div className="h-full flex flex-col">
 								{/* Content Header with Actions */}
 								<div className="border-b px-4 py-3 flex items-center justify-between">
-									<h3 className="font-medium">Generated Content</h3>
+									<div className="flex items-center gap-3">
+										<h3 className="font-medium">Generated Content</h3>
+										{isContentSaved && (
+											<div className="flex items-center gap-1 text-green-600 text-sm">
+												<IconCheck className="h-4 w-4" />
+												<span>Saved</span>
+											</div>
+										)}
+										{contentHistory.length > 1 && (
+											<span className="text-sm text-muted-foreground">
+												(Version {currentVersionIndex + 1} of{" "}
+												{contentHistory.length})
+											</span>
+										)}
+									</div>
 									<div className="flex items-center gap-3">
 										{/* Actions Menu */}
 										<DropdownMenu>
@@ -687,14 +891,14 @@ export default function ContentGenerator() {
 												<Button
 													variant="outline"
 													size="sm"
-													disabled={saveContentMutation.isPending}
+													disabled={saveContentMutation.isPending || isRevising}
 												>
-													Save...
+													Actions
 												</Button>
 											</DropdownMenuTrigger>
 											<DropdownMenuContent align="end">
 												<DropdownMenuItem
-													onClick={() => handleSaveContent(false)}
+													onClick={handleOpenSaveDialog}
 												>
 													<IconBookmark className="h-4 w-4 mr-2" />
 													Save Content
@@ -703,6 +907,18 @@ export default function ContentGenerator() {
 													<DropdownMenuItem onClick={handleSaveAsTrainingData}>
 														<IconBookmark className="h-4 w-4 mr-2" />
 														Save as Training Data
+													</DropdownMenuItem>
+												)}
+												<DropdownMenuItem onClick={handleRequestRevision}>
+													<IconEdit className="h-4 w-4 mr-2" />
+													Ask for Revision
+												</DropdownMenuItem>
+												{currentVersionIndex > 0 && (
+													<DropdownMenuItem
+														onClick={handleBackToPreviousVersion}
+													>
+														<IconArrowBackUp className="h-4 w-4 mr-2" />
+														Back to Previous Version
 													</DropdownMenuItem>
 												)}
 												<DropdownMenuItem onClick={handleCopyToClipboard}>
@@ -799,6 +1015,52 @@ export default function ContentGenerator() {
 				</div>
 			</div>
 
+			{/* Save Content Dialog */}
+			<Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>Save Content</DialogTitle>
+						<DialogDescription>
+							{selectedInsight 
+								? "The title has been pre-filled with your insight. You can edit it or use as is."
+								: "Give your content a custom title or leave blank to use your topic."}
+						</DialogDescription>
+					</DialogHeader>
+					<div className="space-y-4">
+						<div className="space-y-2">
+							<Label htmlFor={saveTitleId}>Title {selectedInsight ? "" : "(Optional)"}</Label>
+							<Input
+								id={saveTitleId}
+								value={saveTitle}
+								onChange={(e) => setSaveTitle(e.target.value)}
+								placeholder={selectedInsight 
+									? "Edit the insight title or use as is..."
+									: "Enter a custom title or leave blank to use topic..."}
+							/>
+							<p className="text-xs text-muted-foreground">
+								{selectedInsight 
+									? "You can edit the title or keep the insight's title."
+									: "If left blank, your topic/instructions will be used as the title."}
+							</p>
+						</div>
+					</div>
+					<DialogFooter>
+						<Button
+							variant="outline"
+							onClick={() => setSaveDialogOpen(false)}
+						>
+							Cancel
+						</Button>
+						<Button
+							onClick={confirmSaveContent}
+							disabled={saveContentMutation.isPending}
+						>
+							{saveContentMutation.isPending ? "Saving..." : "Save"}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
 			{/* Training Feedback Dialog */}
 			<Dialog open={trainingDialogOpen} onOpenChange={setTrainingDialogOpen}>
 				<DialogContent>
@@ -843,6 +1105,65 @@ export default function ContentGenerator() {
 				</DialogContent>
 			</Dialog>
 
+			{/* Revision Dialog */}
+			<Dialog
+				open={revisionDialogOpen}
+				onOpenChange={(open) => !isRevising && setRevisionDialogOpen(open)}
+			>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>Ask for Revision</DialogTitle>
+						<DialogDescription>
+							Describe what changes you'd like to make to the content. The AI
+							will revise it while maintaining the same writing style and voice.
+						</DialogDescription>
+					</DialogHeader>
+					<div className="space-y-4">
+						<div className="space-y-2">
+							<Label htmlFor={revisionRequestId}>Revision Instructions</Label>
+							<Textarea
+								id={revisionRequestId}
+								value={revisionRequest}
+								onChange={(e) => setRevisionRequest(e.target.value)}
+								placeholder="e.g., Make it more formal, add more details about X, shorten the introduction..."
+								className="min-h-[120px] resize-none"
+								disabled={isRevising}
+							/>
+						</div>
+						{isRevising && (
+							<div className="flex items-center gap-3 text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
+								<IconLoader2 className="h-4 w-4 animate-spin" />
+								<span>Revising content... This may take 15-30 seconds.</span>
+							</div>
+						)}
+					</div>
+					<DialogFooter>
+						<Button
+							variant="outline"
+							onClick={() => setRevisionDialogOpen(false)}
+							disabled={isRevising}
+						>
+							Cancel
+						</Button>
+						<Button
+							onClick={handleSubmitRevision}
+							disabled={
+								reviseContentMutation.isPending || !revisionRequest.trim()
+							}
+						>
+							{reviseContentMutation.isPending ? (
+								<>
+									<IconLoader2 className="h-4 w-4 mr-2 animate-spin" />
+									Revising...
+								</>
+							) : (
+								"Submit Revision"
+							)}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
 			{/* Insight Selection Dialog */}
 			<Dialog open={insightDialogOpen} onOpenChange={setInsightDialogOpen}>
 				<DialogContent className="max-w-2xl">
@@ -854,49 +1175,70 @@ export default function ContentGenerator() {
 					</DialogHeader>
 					<div className="max-h-96 overflow-y-auto">
 						{personaInsights && personaInsights.length > 0 ? (
-							<div className="space-y-3">
-								{personaInsights.map((insight) => (
-									<div
-										key={insight.id}
-										className="border rounded-lg p-4 cursor-pointer hover:bg-muted/50 transition-colors"
-										onClick={() => handleSelectInsight(insight.id.toString())}
-									>
-										<div className="flex justify-between items-start mb-2">
-											<h4 className="font-medium">{insight.title}</h4>
-											<span className="text-xs text-muted-foreground">
-												{insight.resourceContent?.title}
-											</span>
-										</div>
-										<ul className="text-sm text-muted-foreground space-y-1">
-											{typeof insight.keyPoints === 'string' 
-												? JSON.parse(insight.keyPoints).slice(0, 3).map((point: string, index: number) => (
-													<li key={index} className="flex items-start">
-														<span className="mr-2">•</span>
-														<span>{point}</span>
-													</li>
-												))
-												: insight.keyPoints.slice(0, 3).map((point, index) => (
-													<li key={index} className="flex items-start">
-														<span className="mr-2">•</span>
-														<span>{point}</span>
-													</li>
-												))
-											}
-											{(typeof insight.keyPoints === 'string' 
-												? JSON.parse(insight.keyPoints).length > 3
-												: insight.keyPoints.length > 3
-											) && (
-												<li className="text-xs italic">
-													...and {(typeof insight.keyPoints === 'string' 
-														? JSON.parse(insight.keyPoints).length - 3
-														: insight.keyPoints.length - 3
-													)} more points
-												</li>
-											)}
-										</ul>
-									</div>
+							<Accordion type="multiple" className="w-full">
+								{Object.entries(groupedInsights).map(([resourceTitle, insights]) => (
+									<AccordionItem key={resourceTitle} value={resourceTitle}>
+										<AccordionTrigger>
+											<div className="flex items-center justify-between w-full mr-4">
+												<span className="font-medium">{resourceTitle}</span>
+												<span className="text-xs text-muted-foreground">
+													{insights.length} insight{insights.length !== 1 ? 's' : ''}
+												</span>
+											</div>
+										</AccordionTrigger>
+										<AccordionContent>
+											<div className="space-y-3">
+												{insights.map((insight) => (
+													<button
+														key={insight.id}
+														type="button"
+														className="w-full border rounded-lg p-4 text-left hover:bg-muted/50 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+														onClick={() => handleSelectInsight(insight.id.toString())}
+														onKeyDown={(e) => {
+															if (e.key === 'Enter' || e.key === ' ') {
+																e.preventDefault();
+																handleSelectInsight(insight.id.toString());
+															}
+														}}
+													>
+														<div className="mb-2">
+															<h4 className="font-medium">{insight.title}</h4>
+														</div>
+														<ul className="text-sm text-muted-foreground space-y-1">
+															{typeof insight.keyPoints === "string"
+																? JSON.parse(insight.keyPoints)
+																		.slice(0, 3)
+																		.map((point: string, pointIndex: number) => (
+																			<li key={`${insight.id}-point-${pointIndex}`} className="flex items-start">
+																				<span className="mr-2">•</span>
+																				<span>{point}</span>
+																			</li>
+																		))
+																: insight.keyPoints.slice(0, 3).map((point, pointIndex) => (
+																		<li key={`${insight.id}-point-${pointIndex}`} className="flex items-start">
+																			<span className="mr-2">•</span>
+																			<span>{point}</span>
+																		</li>
+																	))}
+															{(typeof insight.keyPoints === "string"
+																? JSON.parse(insight.keyPoints).length > 3
+																: insight.keyPoints.length > 3) && (
+																<li className="text-xs italic">
+																	...and{" "}
+																	{typeof insight.keyPoints === "string"
+																		? JSON.parse(insight.keyPoints).length - 3
+																		: insight.keyPoints.length - 3}{" "}
+																	more points
+																</li>
+															)}
+														</ul>
+													</button>
+												))}
+											</div>
+										</AccordionContent>
+									</AccordionItem>
 								))}
-							</div>
+							</Accordion>
 						) : (
 							<div className="text-center py-8">
 								<p className="text-muted-foreground">
@@ -906,7 +1248,10 @@ export default function ContentGenerator() {
 						)}
 					</div>
 					<DialogFooter>
-						<Button variant="outline" onClick={() => setInsightDialogOpen(false)}>
+						<Button
+							variant="outline"
+							onClick={() => setInsightDialogOpen(false)}
+						>
 							Cancel
 						</Button>
 					</DialogFooter>

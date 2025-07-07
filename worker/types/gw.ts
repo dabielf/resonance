@@ -143,6 +143,21 @@ export const GenerateContentInput = z
 		message: "Either topic or insightId is required",
 	});
 
+export const ContentHistorySchema = z.object({
+	contentGenerated: z.string(),
+	revisionAsked: z.string().optional(),
+});
+
+export const ReviseContentInput = z.object({
+	contentToRevise: z.string().min(1, "Content to revise is required"),
+	revisionRequest: z.string().min(1, "Revision instructions are required"),
+	psychologyProfileId: z.number().min(1, "Psychology profile ID is required"),
+	writingProfileId: z.number().min(1, "Writing profile ID is required"),
+	personaProfileId: z.number().optional(),
+	contentHistory: z.array(ContentHistorySchema).optional(),
+	contentId: z.number().optional(),
+});
+
 export const SaveContentInput = z.object({
 	content: z.string().min(1, "Content is required"),
 	gwId: z.number().optional(),
@@ -152,6 +167,12 @@ export const SaveContentInput = z.object({
 	prompt: z.string().min(1, "Prompt is required"),
 	userFeedback: z.string().optional(),
 	isTrainingData: z.boolean().optional(),
+	insightId: z.number().optional(),
+});
+
+export const UpdateInsightInput = z.object({
+	id: z.number().min(1, "Insight ID is required"),
+	generatedContentId: z.number().optional(),
 });
 
 export const CreatePersonaInput = z.object({
@@ -175,6 +196,7 @@ export const ValueExtractorInput = z.object({
 
 export const UpdateGeneratedContentInput = z.object({
 	content: z.string().optional(),
+	prompt: z.string().optional(),
 	userFeedBack: z.string().optional(),
 	isTrainingData: z.boolean().optional(),
 });
@@ -333,6 +355,8 @@ export type CreateOriginalContentData = z.infer<
 	typeof CreateOriginalContentInput
 >;
 export type GenerateContentData = z.infer<typeof GenerateContentInput>;
+export type ReviseContentData = z.infer<typeof ReviseContentInput>;
+export type ContentHistory = z.infer<typeof ContentHistorySchema>;
 export type SaveContentData = z.infer<typeof SaveContentInput>;
 export type SaveProfileData = z.infer<typeof CreateProfileInput>;
 export type CreatePersonaData = z.infer<typeof CreatePersonaInput>;

@@ -9,6 +9,7 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import type { GeneratedContentWithRelations } from "@worker/types/gw";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,12 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
 	Select,
@@ -30,7 +37,6 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/router";
-import type { GeneratedContentWithRelations } from "@worker/types/gw";
 
 export const Route = createFileRoute("/app/creation/contents/")({
 	component: RouteComponent,
@@ -44,7 +50,8 @@ function RouteComponent() {
 	const [searchTerm, setSearchTerm] = useState("");
 	const [filterMode, setFilterMode] = useState<FilterMode>("all");
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-	const [contentToDelete, setContentToDelete] = useState<GeneratedContentWithRelations | null>(null);
+	const [contentToDelete, setContentToDelete] =
+		useState<GeneratedContentWithRelations | null>(null);
 
 	// Fetch generated contents
 	const { data, isLoading, error } = useQuery(
@@ -125,7 +132,9 @@ function RouteComponent() {
 
 	const handleToggleTraining = (content: GeneratedContentWithRelations) => {
 		if (!content.ghostwriter) {
-			toast.error("Only writer-generated content can be saved as training data");
+			toast.error(
+				"Only writer-generated content can be saved as training data",
+			);
 			return;
 		}
 
@@ -135,7 +144,9 @@ function RouteComponent() {
 		});
 	};
 
-	const handleCopyToClipboard = async (content: GeneratedContentWithRelations) => {
+	const handleCopyToClipboard = async (
+		content: GeneratedContentWithRelations,
+	) => {
 		try {
 			await navigator.clipboard.writeText(content.content);
 			toast.success("Content copied to clipboard");
@@ -215,7 +226,10 @@ function RouteComponent() {
 
 				<div className="divide-y divide-border rounded-lg border bg-background">
 					{[1, 2, 3, 4, 5].map((key) => (
-						<div key={key} className="flex items-center justify-between px-6 py-4">
+						<div
+							key={key}
+							className="flex items-center justify-between px-6 py-4"
+						>
 							<div className="flex-1 min-w-0">
 								<Skeleton className="h-5 w-32 mb-2" />
 								<Skeleton className="h-4 w-48 mb-1" />
@@ -275,7 +289,10 @@ function RouteComponent() {
 						className="pl-10"
 					/>
 				</div>
-				<Select value={filterMode} onValueChange={(value) => setFilterMode(value as FilterMode)}>
+				<Select
+					value={filterMode}
+					onValueChange={(value) => setFilterMode(value as FilterMode)}
+				>
 					<SelectTrigger className="w-full sm:w-40">
 						<SelectValue placeholder="Filter by" />
 					</SelectTrigger>
@@ -296,7 +313,7 @@ function RouteComponent() {
 							? "No content matches your search criteria."
 							: "No generated content yet."}
 					</p>
-					{(!searchTerm && filterMode === "all") && (
+					{!searchTerm && filterMode === "all" && (
 						<Link to="/app/creation/create">
 							<Button>
 								<IconPlus className="h-4 w-4 mr-2" />
@@ -333,49 +350,56 @@ function RouteComponent() {
 								</div>
 							</div>
 							<div className="flex items-center gap-2 ml-4">
-								<Button 
-									size="sm" 
-									variant="outline" 
+								<Button
+									size="sm"
+									variant="outline"
 									onClick={() => handleViewContent(content.id)}
 								>
 									<IconEye className="h-4 w-4 mr-1.5" />
 									View
 								</Button>
-								{content.ghostwriter && (
-									<Button
-										size="sm"
-										variant="outline"
-										onClick={() => handleToggleTraining(content)}
-										disabled={updateContentMutation.isPending}
-									>
-										<IconBookmark className="h-4 w-4 mr-1.5" />
-										{content.isTrainingData ? "Remove Training" : "Add Training"}
-									</Button>
-								)}
-								<Button
-									size="sm"
-									variant="outline"
-									onClick={() => handleCopyToClipboard(content)}
-								>
-									<IconCopy className="h-4 w-4 mr-1.5" />
-									Copy
-								</Button>
-								<Button
-									size="sm"
-									variant="outline"
-									onClick={() => handleDownloadMarkdown(content)}
-								>
-									<IconDownload className="h-4 w-4 mr-1.5" />
-									Download
-								</Button>
-								<Button
-									size="sm"
-									variant="outline"
-									onClick={() => handleDelete(content)}
-								>
-									<IconTrash className="h-4 w-4 mr-1.5" />
-									Delete
-								</Button>
+								<DropdownMenu>
+									<DropdownMenuTrigger asChild>
+										<Button
+											size="sm"
+											variant="outline"
+											disabled={
+												updateContentMutation.isPending ||
+												deleteContentMutation.isPending
+											}
+										>
+											Actions
+										</Button>
+									</DropdownMenuTrigger>
+									<DropdownMenuContent align="end">
+										{content.ghostwriter && (
+											<DropdownMenuItem
+												onClick={() => handleToggleTraining(content)}
+											>
+												<IconBookmark className="h-4 w-4 mr-2" />
+												{content.isTrainingData
+													? "Remove From Training"
+													: "Add To Training"}
+											</DropdownMenuItem>
+										)}
+										<DropdownMenuItem
+											onClick={() => handleCopyToClipboard(content)}
+										>
+											<IconCopy className="h-4 w-4 mr-2" />
+											Copy to Clipboard
+										</DropdownMenuItem>
+										<DropdownMenuItem
+											onClick={() => handleDownloadMarkdown(content)}
+										>
+											<IconDownload className="h-4 w-4 mr-2" />
+											Download as MD
+										</DropdownMenuItem>
+										<DropdownMenuItem onClick={() => handleDelete(content)}>
+											<IconTrash className="h-4 w-4 mr-2" />
+											Delete
+										</DropdownMenuItem>
+									</DropdownMenuContent>
+								</DropdownMenu>
 							</div>
 						</div>
 					))}
@@ -388,8 +412,8 @@ function RouteComponent() {
 					<DialogHeader>
 						<DialogTitle>Delete Content</DialogTitle>
 						<DialogDescription>
-							Are you sure you want to delete this generated content? This action
-							cannot be undone.
+							Are you sure you want to delete this generated content? This
+							action cannot be undone.
 						</DialogDescription>
 					</DialogHeader>
 					<DialogFooter>

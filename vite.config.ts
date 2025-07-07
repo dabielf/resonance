@@ -7,6 +7,21 @@ import { defineConfig } from "vite";
 
 // https://vite.dev/config/
 export default defineConfig({
+	build: {
+		target: 'es2022', // Support top-level await
+	},
+	optimizeDeps: {
+		esbuildOptions: {
+			supported: {
+				'top-level-await': true,
+			},
+		},
+	},
+	esbuild: {
+		supported: {
+			'top-level-await': true,
+		},
+	},
 	plugins: [
 		tanstackRouter({
 			target: "react",

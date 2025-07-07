@@ -231,7 +231,7 @@ export function WriterCreationWizard() {
 									className={`
                     flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-200
                     ${isActive ? "border-primary bg-primary text-primary-foreground" : ""}
-                    ${isCompleted ? "border-green-500 bg-green-500 text-white" : ""}
+                    ${isCompleted ? "border-primary bg-primary text-primary-foreground" : ""}
                     ${!isActive && !isCompleted ? "border-muted-foreground/30 text-muted-foreground" : ""}
                   `}
 									whileHover={isAccessible ? { scale: 1.05 } : {}}
@@ -368,11 +368,11 @@ Continue adding more samples...`}
 								</div>
 
 								<div className="space-y-3">
-									<div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-										<h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
+									<div className="p-3 bg-muted border border-border rounded-lg">
+										<h4 className="text-sm font-medium text-foreground mb-1">
 											How to format your samples:
 										</h4>
-										<ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+										<ul className="text-sm text-foreground space-y-1">
 											<li>
 												• Paste 10-20 different writing samples for best results
 											</li>
@@ -391,8 +391,8 @@ Continue adding more samples...`}
 									</div>
 
 									{countSamples() > 0 && countSamples() < 10 && (
-										<div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-											<p className="text-sm text-amber-800 dark:text-amber-200">
+										<div className="p-3 bg-muted border border-border rounded-lg">
+											<p className="text-sm text-foreground">
 												<strong>Recommendation:</strong> Add at least 10 samples
 												for optimal results. Currently detected:{" "}
 												{countSamples()} sample{countSamples() !== 1 ? "s" : ""}
@@ -402,8 +402,8 @@ Continue adding more samples...`}
 									)}
 
 									{countSamples() >= 10 && (
-										<div className="p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
-											<p className="text-sm text-green-800 dark:text-green-200">
+										<div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
+											<p className="text-sm text-primary">
 												<strong>Great!</strong> You have {countSamples()}{" "}
 												samples.
 												{countSamples() < 20
@@ -473,11 +473,11 @@ Continue adding more samples...`}
 									</div>
 								</div>
 
-								<div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-									<h4 className="font-medium text-sm text-blue-900 dark:text-blue-100 mb-2">
+								<div className="p-4 bg-muted border border-border rounded-lg">
+									<h4 className="font-medium text-sm text-foreground mb-2">
 										What happens next?
 									</h4>
-									<ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+									<ul className="text-sm text-foreground space-y-1">
 										<li>• AI analyzes your writing patterns and psychology</li>
 										<li>• Creates a unique psychology profile</li>
 										<li>• Generates a personalized writing style profile</li>
@@ -506,7 +506,7 @@ Continue adding more samples...`}
 									}}
 								>
 									{processingStage === "complete" ? (
-										<IconCheck className="h-16 w-16 text-green-500 mx-auto" />
+										<IconCheck className="h-16 w-16 text-primary mx-auto" />
 									) : (
 										<IconBrain className="h-16 w-16 text-primary mx-auto" />
 									)}
@@ -535,7 +535,7 @@ Continue adding more samples...`}
 												className="h-2 w-2 bg-primary rounded-full flex-shrink-0"
 											/>
 										) : (
-											<IconCheck className="h-5 w-5 text-green-500 flex-shrink-0" />
+											<IconCheck className="h-5 w-5 text-primary flex-shrink-0" />
 										)}
 										<span
 											className={`text-sm ${processingStage !== "creating" ? "text-muted-foreground" : ""}`}
@@ -553,9 +553,9 @@ Continue adding more samples...`}
 												className="h-2 w-2 bg-primary rounded-full flex-shrink-0"
 											/>
 										) : processingStage === "creating" ? (
-											<div className="h-2 w-2 bg-gray-300 rounded-full flex-shrink-0" />
+											<div className="h-2 w-2 bg-muted-foreground/30 rounded-full flex-shrink-0" />
 										) : (
-											<IconCheck className="h-5 w-5 text-green-500 flex-shrink-0" />
+											<IconCheck className="h-5 w-5 text-primary flex-shrink-0" />
 										)}
 										<span
 											className={`text-sm ${
@@ -579,9 +579,9 @@ Continue adding more samples...`}
 												className="h-2 w-2 bg-primary rounded-full flex-shrink-0"
 											/>
 										) : ["creating", "uploading"].includes(processingStage) ? (
-											<div className="h-2 w-2 bg-gray-300 rounded-full flex-shrink-0" />
+											<div className="h-2 w-2 bg-muted-foreground/30 rounded-full flex-shrink-0" />
 										) : (
-											<IconCheck className="h-5 w-5 text-green-500 flex-shrink-0" />
+											<IconCheck className="h-5 w-5 text-primary flex-shrink-0" />
 										)}
 										<span
 											className={`text-sm ${
@@ -605,9 +605,9 @@ Continue adding more samples...`}
 												className="h-2 w-2 bg-primary rounded-full flex-shrink-0"
 											/>
 										) : processingStage === "complete" ? (
-											<IconCheck className="h-5 w-5 text-green-500 flex-shrink-0" />
+											<IconCheck className="h-5 w-5 text-primary flex-shrink-0" />
 										) : (
-											<div className="h-2 w-2 bg-gray-300 rounded-full flex-shrink-0" />
+											<div className="h-2 w-2 bg-muted-foreground/30 rounded-full flex-shrink-0" />
 										)}
 										<span
 											className={`text-sm ${

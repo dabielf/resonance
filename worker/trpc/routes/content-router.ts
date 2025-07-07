@@ -20,6 +20,7 @@ import {
 	CreateWriterWithProfilesInput,
 	GenerateContentInput,
 	type GeneratedContent,
+	ReviseContentInput,
 	SaveContentInput,
 	SaveProfileInput,
 	UpdateGeneratedContentInput,
@@ -43,6 +44,9 @@ const { writeProfileModifier } = await import(
 );
 const { extractPersona } = await import(
 	"../../agents/persona-extractor"
+);
+const { reviseContent } = await import(
+	"../../agents/content-reviser"
 );
 
 export const contentRouter = t.router({
@@ -490,6 +494,7 @@ export const contentRouter = t.router({
 					prompt,
 					userFeedback,
 					isTrainingData,
+					insightId,
 				},
 				ctx,
 			}) => {
@@ -509,6 +514,14 @@ export const contentRouter = t.router({
 					})
 					.returning();
 
+				// If insight ID is provided, link the insight to the generated content
+				if (insightId) {
+					await db
+						.update(insights)
+						.set({ generatedContentId: generatedContent[0].id })
+						.where(and(eq(insights.id, insightId), eq(insights.userId, ctx.userId)));
+				}
+
 				return generatedContent[0];
 			},
 		),
@@ -519,10 +532,11 @@ export const contentRouter = t.router({
 			}),
 		)
 		.mutation(
-			async ({ input: { id, content, userFeedBack, isTrainingData }, ctx }) => {
+			async ({ input: { id, content, prompt, userFeedBack, isTrainingData }, ctx }) => {
 				const db = getDB(ctx.env);
 				const updateData: Partial<GeneratedContent> = {};
 				if (content !== undefined) updateData.content = content;
+				if (prompt !== undefined) updateData.prompt = prompt;
 				if (userFeedBack !== undefined)
 					updateData.userFeedBack = userFeedBack;
 				if (isTrainingData !== undefined)
@@ -1069,6 +1083,83 @@ export const contentRouter = t.router({
 			});
 
 			return response;
+		}),
+	reviseContent: t.procedure
+		.input(ReviseContentInput)
+		.mutation(async ({ input, ctx }) => {
+			const db = getDB(ctx.env);
+			const apiKey = await ctx.crypto.getApiKey("gemini");
+
+			if (!apiKey) {
+				throw new Error("MISSING_API_KEY");
+			}
+
+			const {
+				contentToRevise,
+				revisionRequest,
+				psychologyProfileId,
+				writingProfileId,
+				personaProfileId,
+				contentHistory,
+				contentId,
+			} = input;
+
+			// Fetch the required profiles
+			const [psychologyProfile, writingProfile, personaProfile] =
+				await Promise.all([
+					db.query.psyProfiles.findFirst({
+						where: and(eq(psyProfiles.id, psychologyProfileId), eq(psyProfiles.userId, ctx.userId)),
+					}),
+					db.query.writingProfiles.findFirst({
+						where: and(eq(writingProfiles.id, writingProfileId), eq(writingProfiles.userId, ctx.userId)),
+					}),
+					personaProfileId
+						? db.query.personas.findFirst({
+								where: and(eq(personas.id, personaProfileId), eq(personas.userId, ctx.userId)),
+							})
+						: Promise.resolve(null),
+				]);
+
+			if (!psychologyProfile || !writingProfile) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Profile not found or you don't have permission to access it",
+				});
+			}
+
+			// Call the revision agent
+			const revisedContent = await reviseContent({
+				apiKey,
+				psychologyProfile: psychologyProfile.content,
+				writingProfile: writingProfile.content,
+				personaProfile: personaProfile?.content,
+				revisionRequest,
+				contentToRevise,
+				contentHistory,
+			});
+
+			// If contentId is provided, update the database record
+			if (contentId) {
+				const updatedContent = await db
+					.update(generatedContents)
+					.set({ content: revisedContent })
+					.where(
+						and(
+							eq(generatedContents.id, contentId),
+							eq(generatedContents.userId, ctx.userId),
+						),
+					)
+					.returning();
+
+				if (updatedContent.length === 0) {
+					throw new TRPCError({
+						code: "NOT_FOUND",
+						message: "Content not found or you don't have permission to update it",
+					});
+				}
+			}
+
+			return revisedContent;
 		}),
 	modifyPsyProfile: t.procedure
 		.input(
