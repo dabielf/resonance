@@ -1165,7 +1165,7 @@ export const contentRouter = t.router({
 		.input(
 			z.object({
 				profileId: z.number().min(1, "Profile ID is required"),
-				newName: z.string().min(1, "New name is required"),
+				newName: z.string().min(1, "New name is required").optional(),
 				modifications: z.string().min(1, "Modifications are required"),
 			}),
 		)
@@ -1196,24 +1196,42 @@ export const contentRouter = t.router({
 				modifications,
 			);
 
-			// Create the new profile
-			const newProfile = await db
-				.insert(psyProfiles)
-				.values({
-					userId: ctx.userId,
-					ghostwriterId: null, // New profiles are independent
-					name: newName,
-					content: modifiedContent,
-				})
+			// If newName is provided, create new profile (current behavior)
+			if (newName) {
+				const newProfile = await db
+					.insert(psyProfiles)
+					.values({
+						userId: ctx.userId,
+						ghostwriterId: null, // New profiles are independent
+						name: newName,
+						content: modifiedContent,
+					})
+					.returning();
+
+				return newProfile[0];
+			}
+
+			// Otherwise, update the existing profile
+			const updatedProfile = await db
+				.update(psyProfiles)
+				.set({ content: modifiedContent })
+				.where(and(eq(psyProfiles.id, profileId), eq(psyProfiles.userId, ctx.userId)))
 				.returning();
 
-			return newProfile[0];
+			if (updatedProfile.length === 0) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Psychology profile not found or you don't have permission to update it",
+				});
+			}
+
+			return updatedProfile[0];
 		}),
 	modifyWritingProfile: t.procedure
 		.input(
 			z.object({
 				profileId: z.number().min(1, "Profile ID is required"),
-				newName: z.string().min(1, "New name is required"),
+				newName: z.string().min(1, "New name is required").optional(),
 				modifications: z.string().min(1, "Modifications are required"),
 			}),
 		)
@@ -1244,18 +1262,36 @@ export const contentRouter = t.router({
 				modifications,
 			);
 
-			// Create the new profile
-			const newProfile = await db
-				.insert(writingProfiles)
-				.values({
-					userId: ctx.userId,
-					ghostwriterId: null, // New profiles are independent
-					name: newName,
-					content: modifiedContent,
-				})
+			// If newName is provided, create new profile (current behavior)
+			if (newName) {
+				const newProfile = await db
+					.insert(writingProfiles)
+					.values({
+						userId: ctx.userId,
+						ghostwriterId: null, // New profiles are independent
+						name: newName,
+						content: modifiedContent,
+					})
+					.returning();
+
+				return newProfile[0];
+			}
+
+			// Otherwise, update the existing profile
+			const updatedProfile = await db
+				.update(writingProfiles)
+				.set({ content: modifiedContent })
+				.where(and(eq(writingProfiles.id, profileId), eq(writingProfiles.userId, ctx.userId)))
 				.returning();
 
-			return newProfile[0];
+			if (updatedProfile.length === 0) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Writing profile not found or you don't have permission to update it",
+				});
+			}
+
+			return updatedProfile[0];
 		}),
 	regenerateProfiles: t.procedure
 		.input(z.object({ 

@@ -1,6 +1,7 @@
 import {
 	IconArrowLeft,
 	IconBrain,
+	IconChevronDown,
 	IconCopy,
 	IconDownload,
 	IconEdit,
@@ -22,6 +23,12 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -50,6 +57,7 @@ function RouteComponent() {
 	const [editedContent, setEditedContent] = useState("");
 	const [newProfileName, setNewProfileName] = useState("");
 	const [modifications, setModifications] = useState("");
+	const [modifyMode, setModifyMode] = useState<'current' | 'new'>('current');
 
 	// IDs for accessibility
 	const contentEditorId = useId();
@@ -103,23 +111,37 @@ function RouteComponent() {
 	const generateProfileMutation = useMutation(
 		trpc.contentRouter.modifyWritingProfile.mutationOptions({
 			onSuccess: (data) => {
-				toast.success("New profile generated successfully");
+				// ALWAYS invalidate list query first as content has changed
 				queryClient.invalidateQueries({
 					queryKey: trpc.contentRouter.listWritingProfiles.queryKey(),
 				});
-				// Close the dialog
+				
+				// Close dialog
 				setGenerateDialogOpen(false);
-				// Navigate to the new profile
-				navigate({
-					to: "/app/creation/profiles/writing/$profileId",
-					params: { profileId: data.id.toString() },
-				});
+				
+				// Handle mode-specific logic
+				if (modifyMode === 'current') {
+					toast.success("Profile modified successfully");
+					// Also invalidate current profile query to refresh the content
+					queryClient.invalidateQueries({
+						queryKey: trpc.contentRouter.getWritingProfile.queryKey({
+							id: profileId_numeric,
+						}),
+					});
+				} else {
+					toast.success("New profile generated successfully");
+					// Navigate to the new profile
+					navigate({
+						to: "/app/creation/profiles/writing/$profileId",
+						params: { profileId: data.id.toString() },
+					});
+				}
 			},
 			onError: (error) => {
 				if (error.message === "MISSING_API_KEY") {
 					toast.error("API key required. Please check your settings.");
 				} else {
-					toast.error("Failed to generate new profile");
+					toast.error(modifyMode === 'current' ? "Failed to modify profile" : "Failed to generate new profile");
 				}
 				// Close dialog on error too
 				setGenerateDialogOpen(false);
@@ -153,18 +175,26 @@ function RouteComponent() {
 		deleteProfileMutation.mutate({ id: profile.id });
 	};
 
+	const handleModifyCurrent = () => {
+		setModifyMode('current');
+		setModifications("");
+		setGenerateDialogOpen(true);
+	};
+
 	const handleGenerateNew = () => {
+		setModifyMode('new');
 		setNewProfileName("");
 		setModifications("");
 		setGenerateDialogOpen(true);
 	};
 
 	const confirmGenerateNew = () => {
-		if (!profile || !newProfileName.trim() || !modifications.trim()) return;
+		if (!profile || !modifications.trim()) return;
+		if (modifyMode === 'new' && !newProfileName.trim()) return;
 
 		generateProfileMutation.mutate({
 			profileId: profile.id,
-			newName: newProfileName.trim(),
+			newName: modifyMode === 'new' ? newProfileName.trim() : undefined,
 			modifications: modifications.trim(),
 		});
 	};
@@ -268,31 +298,39 @@ function RouteComponent() {
 						</div>
 					</div>
 					<div className="flex items-center gap-2 ml-4">
-						<Button variant="outline" size="sm" onClick={handleGenerateNew}>
-							<IconBrain className="h-4 w-4 mr-2" />
-							Generate New
-						</Button>
-						<Button variant="outline" size="sm" onClick={handleCopyToClipboard}>
-							<IconCopy className="h-4 w-4 mr-2" />
-							Copy
-						</Button>
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={handleDownloadMarkdown}
-						>
-							<IconDownload className="h-4 w-4 mr-2" />
-							Download
-						</Button>
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={handleDelete}
-							className="text-destructive"
-						>
-							<IconTrash className="h-4 w-4 mr-2" />
-							Delete
-						</Button>
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button variant="outline" size="sm">
+									Actions
+									<IconChevronDown className="h-4 w-4 ml-1" />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end">
+								<DropdownMenuItem onClick={handleModifyCurrent}>
+									<IconEdit className="h-4 w-4 mr-2" />
+									Modify Profile
+								</DropdownMenuItem>
+								<DropdownMenuItem onClick={handleGenerateNew}>
+									<IconBrain className="h-4 w-4 mr-2" />
+									Generate New Profile
+								</DropdownMenuItem>
+								<DropdownMenuItem onClick={handleCopyToClipboard}>
+									<IconCopy className="h-4 w-4 mr-2" />
+									Copy to Clipboard
+								</DropdownMenuItem>
+								<DropdownMenuItem onClick={handleDownloadMarkdown}>
+									<IconDownload className="h-4 w-4 mr-2" />
+									Download as Markdown
+								</DropdownMenuItem>
+								<DropdownMenuItem 
+									onClick={handleDelete}
+									className="text-destructive"
+								>
+									<IconTrash className="h-4 w-4 mr-2" />
+									Delete Profile
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
 					</div>
 				</div>
 			</div>
@@ -364,22 +402,27 @@ function RouteComponent() {
 			>
 				<DialogContent className="max-w-2xl">
 					<DialogHeader>
-						<DialogTitle>Generate New Profile</DialogTitle>
+						<DialogTitle>
+							{modifyMode === 'current' ? 'Modify Profile' : 'Generate New Profile'}
+						</DialogTitle>
 						<DialogDescription>
-							Create a new writing style profile based on this one with your
-							specified modifications. This will take 15-30 seconds.
+							{modifyMode === 'current' 
+								? 'Describe how you want to modify this profile. The AI will update it while preserving the core structure.'
+								: 'Create a new writing style profile based on this one with your specified modifications. This will take 15-30 seconds.'}
 						</DialogDescription>
 					</DialogHeader>
 					<div className="space-y-4">
-						<div className="space-y-2">
-							<Label htmlFor={nameInputId}>New Profile Name</Label>
-							<Input
-								id={nameInputId}
-								value={newProfileName}
-								onChange={(e) => setNewProfileName(e.target.value)}
-								placeholder="Enter name for the new profile"
-							/>
-						</div>
+						{modifyMode === 'new' && (
+							<div className="space-y-2">
+								<Label htmlFor={nameInputId}>New Profile Name</Label>
+								<Input
+									id={nameInputId}
+									value={newProfileName}
+									onChange={(e) => setNewProfileName(e.target.value)}
+									placeholder="Enter name for the new profile"
+								/>
+							</div>
+						)}
 						<div className="space-y-2">
 							<Label htmlFor={modificationsId}>Modifications</Label>
 							<Textarea
@@ -408,19 +451,28 @@ function RouteComponent() {
 							onClick={confirmGenerateNew}
 							disabled={
 								generateProfileMutation.isPending ||
-								!newProfileName.trim() ||
-								!modifications.trim()
+								!modifications.trim() ||
+								(modifyMode === 'new' && !newProfileName.trim())
 							}
 						>
 							{generateProfileMutation.isPending ? (
 								<>
 									<IconLoader2 className="h-4 w-4 mr-2 animate-spin" />
-									Generating...
+									{modifyMode === 'current' ? 'Modifying...' : 'Generating...'}
 								</>
 							) : (
 								<>
-									<IconBrain className="h-4 w-4 mr-2" />
-									Generate New Profile
+									{modifyMode === 'current' ? (
+										<>
+											<IconEdit className="h-4 w-4 mr-2" />
+											Modify Profile
+										</>
+									) : (
+										<>
+											<IconBrain className="h-4 w-4 mr-2" />
+											Generate New Profile
+										</>
+									)}
 								</>
 							)}
 						</Button>
